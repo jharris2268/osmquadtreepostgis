@@ -1,0 +1,15 @@
+html/
+latex/
+old/
+oqt-*.zip
+oldbuild/
+python/oqt.egg-info
+python/build
+python/dist
+build/
+xx.out
+xml/
+python/oqt/__pycache__/
+oldstuff/
+docs/build/
+docs/xml/
