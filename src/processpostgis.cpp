@@ -130,9 +130,8 @@ mperrorvec process_geometry_postgis(const GeometryParameters& params, const Post
     writer = write_to_postgis_callback(writer, params.numchan, postgis.connstring, postgis.tableprfx, postgis.coltags, header, postgis.use_binary,postgis.alloc_func);
     
     auto addwns = process_geometry_blocks(
-            writer, params.style, params.box, params.parent_tag_spec, params.add_rels,
-            params.add_mps, params.recalcqts, params.findmz,
-            [&errors_res](mperrorvec& ee) { errors_res.swap(ee); }, params.addwn_split
+            writer, params,
+            [&errors_res](mperrorvec& ee) { errors_res.swap(ee); }
     );
     
     read_blocks_merge(params.filenames, addwns, params.locs, params.numchan, nullptr, ReadBlockFlags::Empty, 1<<14);
@@ -164,8 +163,7 @@ mperrorvec process_geometry_postgis_nothread(const GeometryParameters& params, c
     writer = write_to_postgis_callback_nothread(writer, postgis.connstring, postgis.tableprfx, postgis.coltags, header, postgis.use_binary,postgis.alloc_func);
     
     block_callback addwns = process_geometry_blocks_nothread(
-            writer, params.style, params.box, params.parent_tag_spec, params.add_rels,
-            params.add_mps, params.recalcqts, params.findmz,
+            writer, params,
             [&errors_res](mperrorvec& ee) { errors_res.swap(ee); }
     );
     
@@ -199,9 +197,8 @@ mperrorvec process_geometry_csvcallback(const GeometryParameters& params,
        
     
     auto addwns = process_geometry_blocks(
-            csvcallback, params.style, params.box, params.parent_tag_spec, params.add_rels,
-            params.add_mps, params.recalcqts, params.findmz,
-            [&errors_res](mperrorvec& ee) { errors_res.swap(ee); }, params.addwn_split
+            csvcallback, params,
+            [&errors_res](mperrorvec& ee) { errors_res.swap(ee); }
     );
     
     read_blocks_merge(params.filenames, addwns, params.locs, params.numchan, nullptr, ReadBlockFlags::Empty, 1<<14);
@@ -221,8 +218,7 @@ mperrorvec process_geometry_csvcallback_nothread(const GeometryParameters& param
     block_callback csvcallback = make_pack_csvblocks_callback(callback,csvblock_callback,postgis.coltags, true, postgis.use_binary,postgis.alloc_func);
     
     block_callback addwns = process_geometry_blocks_nothread(
-            csvcallback, params.style, params.box, params.parent_tag_spec, params.add_rels,
-            params.add_mps, params.recalcqts, params.findmz,
+            csvcallback, params,
             [&errors_res](mperrorvec& ee) { errors_res.swap(ee); }
     );
     

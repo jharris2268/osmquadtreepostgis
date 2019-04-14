@@ -134,9 +134,7 @@ class PackCsvBlocks {
         virtual std::shared_ptr<CsvBlock> call(PrimitiveBlockPtr bl) = 0;
         virtual ~PackCsvBlocks() {}
 };
-std::string pack_hstoretags(const tagvector& tags);
-std::string pack_jsontags_picojson(const tagvector& tags);
-std::string pack_hstoretags_binary(const tagvector& tags);
+
 
 typedef std::function<std::vector<std::string>(ElementPtr)> table_alloc_func;
 

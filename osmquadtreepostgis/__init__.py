@@ -32,22 +32,35 @@ import time,sys,re, gzip
 
 from oqt.geometry import style as geometrystyle, minzoomvalues, process
 
+default_extra_node_cols = ['access','addr:housename','addr:housenumber','addr:interpolation','admin_level','bicycle','covered','foot','horse','layer','name','oneway','ref','religion','surface']
+default_extra_way_cols = ['addr:housenumber', 'admin_level', 'layer', 'bicycle', 'name', 'tracktype', 'addr:interpolation', 'addr:housename', 'horse', 'surface', 'access', 'religion', 'oneway', 'foot', 'covered', 'ref']
 
-def postgis_columns(style, add_min_zoom, extended=False):
+
+def postgis_columns(style, add_min_zoom, extended=False, extra_node_cols=None, extra_way_cols=None):
     ans = []
     
+    node_cols = set(style.feature_keys)
+    way_cols = set(style.feature_keys)
+    if style.other_keys is None:
+        node_cols.update(extra_node_cols if not extra_node_cols is None else default_extra_node_cols)
+        way_cols.update(extra_way_cols if not extra_way_cols is None else default_extra_way_cols)
+    else:
+        node_cols.update(style.other_keys)
+        way_cols.update(style.other_keys)
     
+        
     point_cols = [
         opg.GeometryColumnSpec("osm_id", opg.GeometryColumnType.BigInteger, opg.GeometryColumnSource.OsmId),
         opg.GeometryColumnSpec("quadtree", opg.GeometryColumnType.BigInteger, opg.GeometryColumnSource.ObjectQuadtree),
         opg.GeometryColumnSpec("tile", opg.GeometryColumnType.BigInteger, opg.GeometryColumnSource.BlockQuadtree),
     ]
-    point_cols += [opg.GeometryColumnSpec(k, opg.GeometryColumnType.Text, opg.GeometryColumnSource.Tag) for k in sorted(style.keys) if style.keys[k].IsNode]
+    
+    point_cols += [opg.GeometryColumnSpec(k, opg.GeometryColumnType.Text, opg.GeometryColumnSource.Tag) for k in sorted(node_cols)]
     point_cols += [opg.GeometryColumnSpec(k, opg.GeometryColumnType.Text, opg.GeometryColumnSource.Tag) for k in style.parent_tags]
     
     if add_min_zoom:
         point_cols.append(opg.GeometryColumnSpec('minzoom', opg.GeometryColumnType.BigInteger, opg.GeometryColumnSource.MinZoom))
-    if style.other_tags:
+    if style.other_keys is None:
         point_cols.append(opg.GeometryColumnSpec('tags', opg.GeometryColumnType.Hstore, opg.GeometryColumnSource.OtherTags))
     point_cols.append(opg.GeometryColumnSpec('way', opg.GeometryColumnType.PointGeometry, opg.GeometryColumnSource.Geometry))
     
@@ -56,15 +69,15 @@ def postgis_columns(style, add_min_zoom, extended=False):
         opg.GeometryColumnSpec("quadtree", opg.GeometryColumnType.BigInteger, opg.GeometryColumnSource.ObjectQuadtree),
         opg.GeometryColumnSpec("tile", opg.GeometryColumnType.BigInteger, opg.GeometryColumnSource.BlockQuadtree),
     ]
-    line_cols += [opg.GeometryColumnSpec(k, opg.GeometryColumnType.Text, opg.GeometryColumnSource.Tag) for k in sorted(style.keys) if style.keys[k].IsWay and k!='layer']
-    line_cols += [opg.GeometryColumnSpec(k, opg.GeometryColumnType.Text, opg.GeometryColumnSource.Tag) for k in style.parent_relations]
+    line_cols += [opg.GeometryColumnSpec(k, opg.GeometryColumnType.Text, opg.GeometryColumnSource.Tag) for k in sorted(way_cols) if k!='layer']
+    line_cols += [opg.GeometryColumnSpec(k.target_key, opg.GeometryColumnType.Text, opg.GeometryColumnSource.Tag) for k in style.relation_tag_spec]
     
     line_cols.append(opg.GeometryColumnSpec("layer", opg.GeometryColumnType.BigInteger, opg.GeometryColumnSource.Layer))
     line_cols.append(opg.GeometryColumnSpec("z_order", opg.GeometryColumnType.BigInteger, opg.GeometryColumnSource.ZOrder))
     
     if add_min_zoom:
         line_cols.append(opg.GeometryColumnSpec('minzoom', opg.GeometryColumnType.BigInteger, opg.GeometryColumnSource.MinZoom))
-    if style.other_tags:
+    if style.other_keys is None:
         line_cols.append(opg.GeometryColumnSpec('tags', opg.GeometryColumnType.Hstore, opg.GeometryColumnSource.OtherTags))
     
     line_cols.append(opg.GeometryColumnSpec('length', opg.GeometryColumnType.Double, opg.GeometryColumnSource.Length))
@@ -77,14 +90,14 @@ def postgis_columns(style, add_min_zoom, extended=False):
         opg.GeometryColumnSpec("tile", opg.GeometryColumnType.BigInteger, opg.GeometryColumnSource.BlockQuadtree),
     ]
     
-    poly_cols += [opg.GeometryColumnSpec(k, opg.GeometryColumnType.Text, opg.GeometryColumnSource.Tag) for k in sorted(style.keys) if style.keys[k].IsWay and k!='layer']
+    poly_cols += [opg.GeometryColumnSpec(k, opg.GeometryColumnType.Text, opg.GeometryColumnSource.Tag) for k in sorted(way_cols) if k!='layer']
     
     poly_cols.append(opg.GeometryColumnSpec("layer", opg.GeometryColumnType.BigInteger, opg.GeometryColumnSource.Layer))
     poly_cols.append(opg.GeometryColumnSpec("z_order", opg.GeometryColumnType.BigInteger, opg.GeometryColumnSource.ZOrder))
     
     if add_min_zoom:
         poly_cols.append(opg.GeometryColumnSpec('minzoom', opg.GeometryColumnType.BigInteger, opg.GeometryColumnSource.MinZoom))
-    if style.other_tags:
+    if style.other_keys is None:
         poly_cols.append(opg.GeometryColumnSpec('tags', opg.GeometryColumnType.Hstore, opg.GeometryColumnSource.OtherTags))
     poly_cols.append(opg.GeometryColumnSpec('way_area', opg.GeometryColumnType.Double, opg.GeometryColumnSource.Area))
     poly_cols.append(opg.GeometryColumnSpec('way', opg.GeometryColumnType.PolygonGeometry, opg.GeometryColumnSource.Geometry))
