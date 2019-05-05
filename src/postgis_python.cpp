@@ -47,6 +47,8 @@
 #include "oqt/geometry/elements/complicatedpolygon.hpp"
 #include "oqt/geometry/elements/waywithnodes.hpp"
 #include "gzstream.hpp"
+
+#include "validategeoms.hpp"
 #include <cmath> 
 using namespace oqt;
 
@@ -294,7 +296,8 @@ void set_params_alloc_func(geometry::PostgisParameters& gp, py::object obj) {
 }
 
 
-
+    
+    
 
 
 PYBIND11_DECLARE_HOLDER_TYPE(XX, std::shared_ptr<XX>);
@@ -316,6 +319,8 @@ void osmquadtreepostgis_defs(py::module& m) {
         .def_readwrite("coltags", &geometry::PostgisParameters::coltags)
         .def_readwrite("use_binary", &geometry::PostgisParameters::use_binary)
         .def_property("alloc_func", [](geometry::PostgisParameters& gp) { return gp.alloc_func; }, &set_params_alloc_func) 
+        .def_readwrite("split_multipolygons", &geometry::PostgisParameters::split_multipolygons)
+        .def_readwrite("validate_geometry", &geometry::PostgisParameters::validate_geometry)
     ;
     
     m.def("process_geometry_postgis", &process_geometry_postgis_py);
@@ -350,6 +355,7 @@ void osmquadtreepostgis_defs(py::module& m) {
         .value("Hstore", geometry::ColumnType::Hstore)
         .value("Json", geometry::ColumnType::Json)
         .value("TextArray", geometry::ColumnType::TextArray)
+        .value("Geometry", geometry::ColumnType::Geometry)
         .value("PointGeometry", geometry::ColumnType::PointGeometry)
         .value("LineGeometry", geometry::ColumnType::LineGeometry)
         .value("PolygonGeometry", geometry::ColumnType::PolygonGeometry)
@@ -367,6 +373,7 @@ void osmquadtreepostgis_defs(py::module& m) {
         .value("Length", geometry::ColumnSource::Length)
         .value("Area", geometry::ColumnSource::Area)
         .value("Geometry", geometry::ColumnSource::Geometry)
+        .value("RepresentativePointGeometry", geometry::ColumnSource::RepresentativePointGeometry)
     ;
     
     py::class_<geometry::ColumnSpec>(m, "GeometryColumnSpec")
@@ -384,6 +391,14 @@ void osmquadtreepostgis_defs(py::module& m) {
             ts.columns=cc;
         })
     ;
+    m.def("validate_geometry", [](std::shared_ptr<BaseGeometry> ele) {
+        auto gg = geometry::make_geos_geometry(ele);
+        gg->validate();
+        auto a = py::bytes(gg->Wkb());
+        auto b = py::bytes(gg->PointWkb());
+        return py::make_tuple(a,b);
+    });
+    
 };
 
 PYBIND11_PLUGIN(_osmquadtreepostgis) {

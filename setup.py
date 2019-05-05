@@ -19,7 +19,7 @@ if not os.path.exists(os.path.join(postgresql_path, "libpq-fe.h")):
 
 
 
-libs=['z','pq','stdc++fs', 'oqt']
+libs=['z','pq','stdc++fs', 'oqt', 'geos_c']
 
 class my_build_ext(build_ext):
     def build_extensions(self):
@@ -36,7 +36,7 @@ class my_build_ext(build_ext):
 ext_modules = []
 
 
-srcs = ['src/processpostgis.cpp', 'src/postgiswriter.cpp', 'src/postgis_python.cpp']
+srcs = ['src/processpostgis.cpp', 'src/postgiswriter.cpp', 'src/postgis_python.cpp', 'src/validategeoms.cpp']
 modname = 'osmquadtreepostgis._osmquadtreepostgis'
 
 ext_modules.append(

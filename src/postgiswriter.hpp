@@ -88,6 +88,7 @@ enum class ColumnType {
     Hstore,
     Json,
     TextArray,
+    Geometry,
     PointGeometry,
     LineGeometry,
     PolygonGeometry
@@ -105,7 +106,8 @@ enum class ColumnSource {
     MinZoom,
     Length,
     Area,
-    Geometry
+    Geometry,
+    RepresentativePointGeometry
 };
 
 
@@ -141,7 +143,7 @@ typedef std::function<std::vector<std::string>(ElementPtr)> table_alloc_func;
 std::vector<std::string> default_table_alloc(ElementPtr geom);
 
 
-std::shared_ptr<PackCsvBlocks> make_pack_csvblocks(const PackCsvBlocks::tagspec& tags, bool with_header, bool binary_format, table_alloc_func table_alloc);
+std::shared_ptr<PackCsvBlocks> make_pack_csvblocks(const PackCsvBlocks::tagspec& tags, bool with_header, bool binary_format, table_alloc_func table_alloc, bool split_multipolygons, bool validate_polygons);
 
 class PostgisWriter {
     public:

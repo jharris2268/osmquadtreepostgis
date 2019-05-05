@@ -42,8 +42,8 @@ namespace geometry {
 
 
 
-block_callback make_pack_csvblocks_callback(block_callback cb, std::function<void(std::shared_ptr<CsvBlock>)> wr, PackCsvBlocks::tagspec tags,bool with_header,bool as_binary, table_alloc_func alloc_func) {
-    auto pc = make_pack_csvblocks(tags,with_header,as_binary, alloc_func);
+block_callback make_pack_csvblocks_callback(block_callback cb, std::function<void(std::shared_ptr<CsvBlock>)> wr, PackCsvBlocks::tagspec tags,bool with_header,bool as_binary, table_alloc_func alloc_func, bool split_multipolygons, bool validate_geometry) {
+    auto pc = make_pack_csvblocks(tags,with_header,as_binary, alloc_func, split_multipolygons,validate_geometry);
     return [cb, wr, pc](PrimitiveBlockPtr bl) {
         if (!bl) {
             //std::cout << "pack_csvblocks done" << std::endl;
@@ -69,7 +69,9 @@ std::vector<block_callback> write_to_postgis_callback(
     const std::string& connection_string, const std::string& table_prfx,
     const PackCsvBlocks::tagspec& coltags,
     bool with_header, bool as_binary,
-    table_alloc_func alloc_func) {
+    table_alloc_func alloc_func,
+    bool split_multipolygons,
+    bool validate_geometry) {
         
     
     auto writers = multi_threaded_callback<CsvBlock>::make(make_postgiswriter_callback(connection_string, table_prfx, with_header,as_binary), numchan);
@@ -85,7 +87,7 @@ std::vector<block_callback> write_to_postgis_callback(
         if (!callbacks.empty()) {
             cb = callbacks[i];
         }
-        res[i]=make_pack_csvblocks_callback(cb, writer_i, coltags, with_header,as_binary,alloc_func);
+        res[i]=make_pack_csvblocks_callback(cb, writer_i, coltags, with_header,as_binary,alloc_func,split_multipolygons,validate_geometry);
     }
     
     return res;
@@ -96,11 +98,13 @@ block_callback write_to_postgis_callback_nothread(
     const std::string& connection_string, const std::string& table_prfx,
     const PackCsvBlocks::tagspec& coltags,
     bool with_header, bool as_binary,
-    table_alloc_func alloc_func) {
+    table_alloc_func alloc_func,
+    bool split_multipolygons,
+    bool validate_geometry) {
         
     
     auto writer = make_postgiswriter_callback(connection_string, table_prfx,with_header,as_binary);
-    return make_pack_csvblocks_callback(callback,writer,coltags,with_header,as_binary,alloc_func);
+    return make_pack_csvblocks_callback(callback,writer,coltags,with_header,as_binary,alloc_func,split_multipolygons,validate_geometry);
 }
 
 
@@ -127,7 +131,7 @@ mperrorvec process_geometry_postgis(const GeometryParameters& params, const Post
     }
     
     bool header = (!postgis.use_binary) ? true : false;
-    writer = write_to_postgis_callback(writer, params.numchan, postgis.connstring, postgis.tableprfx, postgis.coltags, header, postgis.use_binary,postgis.alloc_func);
+    writer = write_to_postgis_callback(writer, params.numchan, postgis.connstring, postgis.tableprfx, postgis.coltags, header, postgis.use_binary,postgis.alloc_func,postgis.split_multipolygons,postgis.validate_geometry);
     
     auto addwns = process_geometry_blocks(
             writer, params,
@@ -160,7 +164,7 @@ mperrorvec process_geometry_postgis_nothread(const GeometryParameters& params, c
    
     
     bool header = (!postgis.use_binary) ? true : false;
-    writer = write_to_postgis_callback_nothread(writer, postgis.connstring, postgis.tableprfx, postgis.coltags, header, postgis.use_binary,postgis.alloc_func);
+    writer = write_to_postgis_callback_nothread(writer, postgis.connstring, postgis.tableprfx, postgis.coltags, header, postgis.use_binary,postgis.alloc_func,postgis.split_multipolygons,postgis.validate_geometry);
     
     block_callback addwns = process_geometry_blocks_nothread(
             writer, params,
@@ -192,7 +196,7 @@ mperrorvec process_geometry_csvcallback(const GeometryParameters& params,
     
     mperrorvec errors_res;
     
-    auto cb=make_pack_csvblocks_callback(callback,csvblock_callback,postgis.coltags, true, postgis.use_binary,postgis.alloc_func);
+    auto cb=make_pack_csvblocks_callback(callback,csvblock_callback,postgis.coltags, true, postgis.use_binary,postgis.alloc_func,postgis.split_multipolygons,postgis.validate_geometry);
     auto csvcallback = multi_threaded_callback<PrimitiveBlock>::make(cb,params.numchan);
        
     
@@ -215,7 +219,7 @@ mperrorvec process_geometry_csvcallback_nothread(const GeometryParameters& param
     
     mperrorvec errors_res;
     
-    block_callback csvcallback = make_pack_csvblocks_callback(callback,csvblock_callback,postgis.coltags, true, postgis.use_binary,postgis.alloc_func);
+    block_callback csvcallback = make_pack_csvblocks_callback(callback,csvblock_callback,postgis.coltags, true, postgis.use_binary,postgis.alloc_func,postgis.split_multipolygons,postgis.validate_geometry);
     
     block_callback addwns = process_geometry_blocks_nothread(
             csvcallback, params,

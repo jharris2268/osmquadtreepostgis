@@ -33,7 +33,7 @@ namespace geometry {
 struct PostgisParameters {
     
     PostgisParameters()
-        : connstring(""), tableprfx(""), use_binary(false) {}
+        : connstring(""), tableprfx(""), use_binary(false), split_multipolygons(false), validate_geometry(false) {}
         
     
     std::string connstring;
@@ -41,6 +41,9 @@ struct PostgisParameters {
     PackCsvBlocks::tagspec coltags;
     bool use_binary;
     table_alloc_func alloc_func;
+    
+    bool split_multipolygons;
+    bool validate_geometry;
 };
 
 

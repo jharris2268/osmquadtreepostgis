@@ -41,6 +41,7 @@
 #include <map>
 #include <postgresql/libpq-fe.h>
 #include "picojson.h"
+#include "validategeoms.hpp"
 
 namespace oqt {
 namespace geometry {
@@ -293,6 +294,7 @@ class PackCsvBlocksTableBase {
     public:
         virtual std::string header()=0;
         virtual std::string call(ElementPtr ele, int64 block_qt)=0;
+        virtual std::string call_complicatedpolygon_part(std::shared_ptr<geometry::ComplicatedPolygon> ele, size_t part, int64 block_qt)=0;
 };
 
 
@@ -368,6 +370,14 @@ class PackCsvBlocksTable : public PackCsvBlocksTableBase {
             }
             return pack_csv_row(res);
             
+        }
+        
+        std::string call_complicatedpolygon_part(std::shared_ptr<geometry::ComplicatedPolygon> ele, size_t part, int64 block_qt) {
+            if (!ele) { throw std::domain_error("??"); }
+            
+            std::vector<std::string> res(table_spec.columns.size());
+            populate_complicatedpolygon_part(ele, part, block_qt, res);
+            return pack_csv_row(res);
         }
     
     private:
@@ -512,7 +522,7 @@ class PackCsvBlocksTable : public PackCsvBlocksTableBase {
                 if (col.source == ColumnSource::OsmId) {
                     current[i] = std::to_string(-1*ele->Id());
                 } else if (col.source == ColumnSource::Part) {
-                    current[i] = std::to_string(ele->Part());
+                    //current[i] = std::to_string(ele->Part());
                 }else if (col.source == ColumnSource::ObjectQuadtree) {
                     current[i] = std::to_string(ele->Quadtree());
                 } else if (col.source == ColumnSource::BlockQuadtree) {
@@ -546,7 +556,48 @@ class PackCsvBlocksTable : public PackCsvBlocksTableBase {
             
         }
             
-        
+        void populate_complicatedpolygon_part(std::shared_ptr<geometry::ComplicatedPolygon> ele, size_t part, int64 block_qt, std::vector<std::string>& current) {
+            
+            for (size_t i=0; i < table_spec.columns.size(); i++) {
+                const auto& col = table_spec.columns[i];
+                if (col.source == ColumnSource::OsmId) {
+                    current[i] = std::to_string(-1*ele->Id());
+                } else if (col.source == ColumnSource::Part) {
+                    current[i] = std::to_string(part);
+                }else if (col.source == ColumnSource::ObjectQuadtree) {
+                    current[i] = std::to_string(ele->Quadtree());
+                } else if (col.source == ColumnSource::BlockQuadtree) {
+                    current[i] = std::to_string(block_qt);
+                } else if (col.source == ColumnSource::MinZoom) {
+                    if (ele->MinZoom()>=0) {
+                        current[i] = std::to_string(ele->MinZoom());
+                    }
+                } else if (col.source == ColumnSource::ZOrder) {
+                    if (ele->ZOrder()>0 ) {
+                        current[i]=std::to_string(ele->ZOrder());
+                    }
+                } else if (col.source == ColumnSource::Layer) {
+                    if (ele->ZOrder()>0 ) {
+                        current[i]=std::to_string(ele->ZOrder());
+                    }
+                } else if (col.source == ColumnSource::Area) {
+                    
+                    current[i]=double_string(ele->Parts().at(part).area);
+                    
+                } else if (col.source == ColumnSource::Geometry) {
+                    auto w = geometry::polygon_part_wkb(ele->Parts().at(part), true, true);
+                    current[i] = as_hex(w);
+                }
+                
+            }
+            
+            if (othertags_col>=0) {
+                current[othertags_col] = add_tags(ele->Tags(), current);
+            } else {
+                add_tags(ele->Tags(), current);
+            }
+            
+        }
         
 };
 
@@ -601,8 +652,9 @@ std::string pack_pgbinary_row(const std::vector<std::pair<bool,std::string>>& fi
 
 class PackCsvBlocksTableBinary : public PackCsvBlocksTableBase {
     public:
-        PackCsvBlocksTableBinary(const TableSpec& table_spec_)
-         : table_spec(table_spec_), othertags_col(-1) {
+        PackCsvBlocksTableBinary(const TableSpec& table_spec_, bool validate_geometry_)
+         : table_spec(table_spec_), validate_geometry(validate_geometry_), othertags_col(-1), has_geometry(false), has_rep_point(false) {
+            
             
             for (size_t i=0; i<table_spec.columns.size(); i++) {
                 const auto& col = table_spec.columns[i];
@@ -613,7 +665,12 @@ class PackCsvBlocksTableBinary : public PackCsvBlocksTableBase {
                 if (col.source == ColumnSource::Tag) {
                     tag_cols[col.name] = i;
                 }
-                
+                if (col.source == ColumnSource::Geometry) {
+                    has_geometry=true;
+                }
+                if (col.source == ColumnSource::RepresentativePointGeometry) {
+                    has_rep_point=true;
+                }
             }
             
             
@@ -645,12 +702,78 @@ class PackCsvBlocksTableBinary : public PackCsvBlocksTableBase {
             return pack_pgbinary_row(res);
             
         }
+        
+        std::string call_complicatedpolygon_part(std::shared_ptr<geometry::ComplicatedPolygon> ele, size_t part, int64 block_qt) {
+            if (!ele) { throw std::domain_error("??"); }
+            
+            std::vector<std::pair<bool,std::string>> res(table_spec.columns.size());
+            populate_complicatedpolygon_part(ele, part, block_qt, res);
+            return pack_pgbinary_row(res);
+        }
+        
     
     private:
         TableSpec table_spec;
+        bool validate_geometry;
         int othertags_col;
         std::map<std::string,size_t> tag_cols;
+        bool has_geometry;
+        bool has_rep_point;
         
+        
+        std::pair<std::string,std::string> prep_geometry(std::shared_ptr<BaseGeometry> geom) {
+            if ((!has_geometry) && (!has_rep_point)) {
+                return std::make_pair("","");
+            }
+            if (geom->Type() == oqt::ElementType::Point) {
+                auto w = geom->Wkb(true,true);
+                return std::make_pair(w,w);
+            }
+            
+            if (has_geometry && (!has_rep_point) && (!validate_geometry)) {
+                auto w = geom->Wkb(true,true);
+                return std::make_pair(w, "");
+            }
+            
+            auto gg = make_geos_geometry(geom);
+            
+            if (validate_geometry) {
+                gg->validate();
+            }
+            std::string wkb, ptwkb;
+            if (has_geometry) {
+                wkb = gg->Wkb();
+            }
+            if (has_rep_point) {
+                ptwkb = gg->PointWkb();
+            }
+            return std::make_pair(wkb,ptwkb);
+        }
+        std::pair<std::string,std::string> prep_geometry_cp_part(std::shared_ptr<ComplicatedPolygon> geom, size_t part) {
+            if ((!has_geometry) && (!has_rep_point)) {
+                return std::make_pair("","");
+            }
+            
+            
+            if (has_geometry && (!has_rep_point) && (!validate_geometry)) {
+                auto w = geom->Wkb(true,true);
+                return std::make_pair(w, "");
+            }
+            
+            auto gg = make_geos_geometry_cp_part(geom,part);
+            
+            if (validate_geometry) {
+                gg->validate();
+            }
+            std::string wkb, ptwkb;
+            if (has_geometry) {
+                wkb = gg->Wkb();
+            }
+            if (has_rep_point) {
+                ptwkb = gg->PointWkb();
+            }
+            return std::make_pair(wkb,ptwkb);
+        }
         
         
         
@@ -673,7 +796,7 @@ class PackCsvBlocksTableBinary : public PackCsvBlocksTableBase {
             
         
         void populate_point(std::shared_ptr<geometry::Point> ele, int64 block_qt, std::vector<std::pair<bool, std::string>>& current) {
-            
+            auto gg = prep_geometry(ele);
             for (size_t i=0; i < table_spec.columns.size(); i++) {
                 const auto& col = table_spec.columns[i];
                 if (col.source == ColumnSource::OsmId) {
@@ -687,7 +810,9 @@ class PackCsvBlocksTableBinary : public PackCsvBlocksTableBase {
                         current[i] = std::make_pair(true, pack_pg_int(col.type, ele->MinZoom()));
                     }
                 } else if (col.source == ColumnSource::Geometry) {
-                    current[i] = std::make_pair(true, ele->Wkb(true, true));
+                    current[i] = std::make_pair(true,gg.first);
+                } else if (col.source == ColumnSource::RepresentativePointGeometry) {
+                    current[i] = std::make_pair(true, gg.second);
                 }
                 
             }
@@ -702,6 +827,7 @@ class PackCsvBlocksTableBinary : public PackCsvBlocksTableBase {
         }
         
         void populate_line(std::shared_ptr<geometry::Linestring> ele, int64 block_qt, std::vector<std::pair<bool,std::string>>& current) {
+            auto gg = prep_geometry(ele);
             
             for (size_t i=0; i < table_spec.columns.size(); i++) {
                 const auto& col = table_spec.columns[i];
@@ -727,7 +853,10 @@ class PackCsvBlocksTableBinary : public PackCsvBlocksTableBase {
                     current[i]=std::make_pair(true, pack_pg_double(col.type, round(ele->Length()*10)/10));
                     
                 } else if (col.source == ColumnSource::Geometry) {
-                    current[i] = std::make_pair(true, ele->Wkb(true, true));
+                    current[i] = std::make_pair(true, gg.first);
+                } else if (col.source == ColumnSource::RepresentativePointGeometry) {
+                    
+                    current[i] = std::make_pair(true, gg.second);
                 }
                 
             }
@@ -742,7 +871,7 @@ class PackCsvBlocksTableBinary : public PackCsvBlocksTableBase {
         }
                 
         void populate_simplepolygon(std::shared_ptr<geometry::SimplePolygon> ele, int64 block_qt, std::vector<std::pair<bool,std::string>>& current) {
-            
+            auto gg = prep_geometry(ele);
             for (size_t i=0; i < table_spec.columns.size(); i++) {
                 const auto& col = table_spec.columns[i];
                 if (col.source == ColumnSource::OsmId) {
@@ -767,7 +896,10 @@ class PackCsvBlocksTableBinary : public PackCsvBlocksTableBase {
                     current[i]=std::make_pair(true, pack_pg_double(col.type, round(ele->Area()*10)/10));
                     
                 } else if (col.source == ColumnSource::Geometry) {
-                    current[i] = std::make_pair(true, ele->Wkb(true, true));
+                    current[i] = std::make_pair(true, gg.first);
+                } else if (col.source == ColumnSource::RepresentativePointGeometry) {
+                    
+                    current[i] = std::make_pair(true, gg.second);
                 }
                 
             }
@@ -779,16 +911,15 @@ class PackCsvBlocksTableBinary : public PackCsvBlocksTableBase {
             }
             
             
-        }
-                
+        }   
         void populate_complicatedpolygon(std::shared_ptr<geometry::ComplicatedPolygon> ele, int64 block_qt, std::vector<std::pair<bool,std::string>>& current) {
-            
+            auto gg = prep_geometry(ele);
             for (size_t i=0; i < table_spec.columns.size(); i++) {
                 const auto& col = table_spec.columns[i];
                 if (col.source == ColumnSource::OsmId) {
                     current[i] = std::make_pair(true, pack_pg_int(col.type, -1*ele->Id()));
                 } else if (col.source == ColumnSource::Part) {
-                    current[i] = std::make_pair(true, pack_pg_int(col.type, ele->Part()));
+                    //current[i] = std::make_pair(true, pack_pg_int(col.type, ele->Part()));
                 }else if (col.source == ColumnSource::ObjectQuadtree) {
                     current[i] = std::make_pair(true, pack_pg_int(col.type, ele->Quadtree()));
                 } else if (col.source == ColumnSource::BlockQuadtree) {
@@ -809,7 +940,55 @@ class PackCsvBlocksTableBinary : public PackCsvBlocksTableBase {
                     current[i]=std::make_pair(true, pack_pg_double(col.type, round(ele->Area()*10)/10));
                     
                 } else if (col.source == ColumnSource::Geometry) {
-                    current[i] = std::make_pair(true, ele->Wkb(true, true));
+                    current[i] = std::make_pair(true, gg.first);
+                } else if (col.source == ColumnSource::RepresentativePointGeometry) {
+                    
+                    current[i] = std::make_pair(true, gg.second);
+                }
+                
+            }
+            
+            if (othertags_col>=0) {
+                current[othertags_col] = std::make_pair(true, add_tags(ele->Tags(), current));
+            } else {
+                add_tags(ele->Tags(), current);
+            }
+            
+        }
+        
+        void populate_complicatedpolygon_part(std::shared_ptr<geometry::ComplicatedPolygon> ele, size_t part, int64 block_qt, std::vector<std::pair<bool,std::string>>& current) {
+            auto gg = prep_geometry_cp_part(ele,part);
+            for (size_t i=0; i < table_spec.columns.size(); i++) {
+                const auto& col = table_spec.columns[i];
+                if (col.source == ColumnSource::OsmId) {
+                    current[i] = std::make_pair(true, pack_pg_int(col.type, -1*ele->Id()));
+                } else if (col.source == ColumnSource::Part) {
+                    current[i] = std::make_pair(true, pack_pg_int(col.type, part));
+                }else if (col.source == ColumnSource::ObjectQuadtree) {
+                    current[i] = std::make_pair(true, pack_pg_int(col.type, ele->Quadtree()));
+                } else if (col.source == ColumnSource::BlockQuadtree) {
+                    current[i] = std::make_pair(true, pack_pg_int(col.type, block_qt));
+                } else if (col.source == ColumnSource::MinZoom) {
+                    if (ele->MinZoom()>=0) {
+                        current[i] = std::make_pair(true, pack_pg_int(col.type, ele->MinZoom()));
+                    }
+                } else if (col.source == ColumnSource::ZOrder) {
+                    if (ele->ZOrder()>0 ) {
+                        current[i]=std::make_pair(true, pack_pg_int(col.type, ele->ZOrder()));
+                    }
+                } else if (col.source == ColumnSource::Layer) {
+                    if (ele->ZOrder()>0 ) {
+                        current[i]=std::make_pair(true, pack_pg_int(col.type, ele->ZOrder()));
+                    }
+                } else if (col.source == ColumnSource::Area) {
+                    double a = ele->Parts().at(part).area;
+                    current[i]=std::make_pair(true, pack_pg_double(col.type, round(a*10)/10));
+                    
+                } else if (col.source == ColumnSource::Geometry) {
+                    current[i] = std::make_pair(true, gg.first);
+                } else if (col.source == ColumnSource::RepresentativePointGeometry) {
+                    
+                    current[i] = std::make_pair(true, gg.second);
                 }
                 
             }
@@ -830,8 +1009,8 @@ class PackCsvBlocksTableBinary : public PackCsvBlocksTableBase {
 
 class PackCsvBlocksImpl : public PackCsvBlocks {
     public:
-        PackCsvBlocksImpl(const PackCsvBlocks::tagspec& tags, bool with_header_, bool binary_format_, table_alloc_func alloc_func_)
-            : with_header(with_header_), binary_format(binary_format_),alloc_func(alloc_func_) {
+        PackCsvBlocksImpl(const PackCsvBlocks::tagspec& tags, bool with_header_, bool binary_format_, table_alloc_func alloc_func_, bool split_multipolygons_, bool validate_geometry_)
+            : with_header(with_header_), binary_format(binary_format_),alloc_func(alloc_func_), split_multipolygons(split_multipolygons_),validate_geometry(validate_geometry_) {
             
             if (!alloc_func) {
                 alloc_func = default_table_alloc;
@@ -839,7 +1018,7 @@ class PackCsvBlocksImpl : public PackCsvBlocks {
             
             for (const auto& ts: tags) {
                 if (binary_format) {
-                    tables[ts.table_name] = std::make_shared<PackCsvBlocksTableBinary>(ts);
+                    tables[ts.table_name] = std::make_shared<PackCsvBlocksTableBinary>(ts,validate_geometry);
                 } else {
                     tables[ts.table_name] = std::make_shared<PackCsvBlocksTable>(ts);
                 }
@@ -874,7 +1053,18 @@ class PackCsvBlocksImpl : public PackCsvBlocks {
                     if (with_header && (output.size()==0)) {
                         output.add(table->header());
                     }
-                    output.add(table->call(obj, block->Quadtree()));
+                    if (split_multipolygons && (obj->Type()==ElementType::ComplicatedPolygon)) {
+                        auto cp = std::dynamic_pointer_cast<geometry::ComplicatedPolygon>(obj);
+                        if (!cp) {
+                            throw std::domain_error("wrong type");
+                        }
+                        for (size_t i=0; i < cp->Parts().size(); i++) {
+                            output.add(table->call_complicatedpolygon_part(cp, i, block->Quadtree()));
+                        }
+                        
+                    } else {
+                        output.add(table->call(obj, block->Quadtree()));
+                    }
                 }
             }           
             
@@ -886,11 +1076,13 @@ class PackCsvBlocksImpl : public PackCsvBlocks {
         bool with_header;
         bool binary_format;
         table_alloc_func alloc_func;
+        bool split_multipolygons;
+        bool validate_geometry;
         std::set<std::string> unknowns;
 };
 
-std::shared_ptr<PackCsvBlocks> make_pack_csvblocks(const PackCsvBlocks::tagspec& tags, bool with_header, bool binary_format, table_alloc_func alloc_func) {
-    return std::make_shared<PackCsvBlocksImpl>(tags, with_header,binary_format, alloc_func);
+std::shared_ptr<PackCsvBlocks> make_pack_csvblocks(const PackCsvBlocks::tagspec& tags, bool with_header, bool binary_format, table_alloc_func alloc_func, bool split_multipolygons, bool validate_geometry) {
+    return std::make_shared<PackCsvBlocksImpl>(tags, with_header,binary_format, alloc_func, split_multipolygons,validate_geometry);
 }            
             
 
@@ -972,6 +1164,7 @@ class PostgisWriterImpl : public PostgisWriter {
                     PQclear(res);
                 }*/
             } catch (std::exception& ex) {
+                
                 write_csv_block("previous.data", prev_block);
                 write_csv_block("current.data", bl);
                 throw ex;
@@ -1034,13 +1227,24 @@ class PostgisWriterImpl : public PostgisWriter {
                 return 0;
             }
 
+            
+
             r = PQputCopyEnd(conn,nullptr);
-            PQclear(res);
             if (r!=PGRES_COMMAND_OK) {
                 Logger::Message() << "\n*****\ncopy failed [" << sql << "]" << PQerrorMessage(conn) << "\n" ;
                     
                 return 0;
             }
+            
+            PQclear(res);
+            
+            res = PQgetResult(conn);
+            if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+                Logger::Message() << "copy end failed: " << PQerrorMessage(conn);
+                throw std::domain_error("failed");
+            }
+                            
+            PQclear(res);
             return 1;
         }
         std::string connection_string;        
