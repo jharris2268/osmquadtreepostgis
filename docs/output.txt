@@ -47,3 +47,52 @@ vacuum analyze planet_20190414_highway                                          
 vacuum analyze planet_20190414_building                                                                                                                 3645.0s
 vacuum analyze planet_20190414_boundary                                                                                                                  100.4s
 created indices in  66264.0s
+
+
+
+
+
+import osmquadtreepostgis as op
+errs=op.write_to_postgis('/home/james/data/planet-apr2019/', None, 'dbname=gis', 'planet_20190506', extended=True,writeindices=False)
+create table planet_20190506_point ("osm_id" bigint, "quadtree" bigint, "tile" bigint, "access" text, "addr:housename" text, "addr:housenumber" text, "addr:interpolation" text, "admin_level" text, "aerialway" text, "aeroway" text, "amenity" text, "barrier" text, "bicycle" text, "boundary" text, "bridge" text, "building" text, "construction" text, "covered" text, "embankment" text, "foot" text, "highway" text, "historic" text, "horse" text, "junction" text, "landuse" text, "layer" text, "leisure" text, "lock" text, "man_made" text, "military" text, "name" text, "natural" text, "oneway" text, "place" text, "power" text, "railway" text, "ref" text, "religion" text, "route" text, "service" text, "shop" text, "surface" text, "tourism" text, "tunnel" text, "water" text, "waterway" text, "parent_highway" text, "parent_service" text, "minzoom" bigint, "tags" hstore, "way" geometry(Point,3857)) with oids
+alter table planet_20190506_point set (autovacuum_enabled=false)
+create table planet_20190506_line ("osm_id" bigint, "quadtree" bigint, "tile" bigint, "access" text, "addr:housename" text, "addr:housenumber" text, "addr:interpolation" text, "admin_level" text, "aerialway" text, "aeroway" text, "amenity" text, "barrier" text, "bicycle" text, "boundary" text, "bridge" text, "building" text, "construction" text, "covered" text, "embankment" text, "foot" text, "highway" text, "historic" text, "horse" text, "junction" text, "landuse" text, "leisure" text, "lock" text, "man_made" text, "military" text, "name" text, "natural" text, "oneway" text, "place" text, "power" text, "railway" text, "ref" text, "religion" text, "route" text, "service" text, "shop" text, "surface" text, "tourism" text, "tracktype" text, "tunnel" text, "water" text, "waterway" text, "min_admin_level" text, "max_admin_level" text, "bus_routes" text, "bicycle_routes" text, "layer" bigint, "z_order" bigint, "minzoom" bigint, "tags" hstore, "length" float, "way" geometry(Linestring,3857)) with oids
+alter table planet_20190506_line set (autovacuum_enabled=false)
+create table planet_20190506_polygon ("osm_id" bigint, "quadtree" bigint, "tile" bigint, "access" text, "addr:housename" text, "addr:housenumber" text, "addr:interpolation" text, "admin_level" text, "aerialway" text, "aeroway" text, "amenity" text, "barrier" text, "bicycle" text, "boundary" text, "bridge" text, "building" text, "construction" text, "covered" text, "embankment" text, "foot" text, "highway" text, "historic" text, "horse" text, "junction" text, "landuse" text, "leisure" text, "lock" text, "man_made" text, "military" text, "name" text, "natural" text, "oneway" text, "place" text, "power" text, "railway" text, "ref" text, "religion" text, "route" text, "service" text, "shop" text, "surface" text, "tourism" text, "tracktype" text, "tunnel" text, "water" text, "waterway" text, "layer" bigint, "z_order" bigint, "minzoom" bigint, "tags" hstore, "way_area" float, "way" geometry(Geometry,3857), "way_point" geometry(Point,3857)) with oids
+alter table planet_20190506_polygon set (autovacuum_enabled=false)
+create table planet_20190506_highway ("osm_id" bigint, "quadtree" bigint, "tile" bigint, "access" text, "addr:housename" text, "addr:housenumber" text, "addr:interpolation" text, "admin_level" text, "aerialway" text, "aeroway" text, "amenity" text, "barrier" text, "bicycle" text, "boundary" text, "bridge" text, "building" text, "construction" text, "covered" text, "embankment" text, "foot" text, "highway" text, "historic" text, "horse" text, "junction" text, "landuse" text, "leisure" text, "lock" text, "man_made" text, "military" text, "name" text, "natural" text, "oneway" text, "place" text, "power" text, "railway" text, "ref" text, "religion" text, "route" text, "service" text, "shop" text, "surface" text, "tourism" text, "tracktype" text, "tunnel" text, "water" text, "waterway" text, "min_admin_level" text, "max_admin_level" text, "bus_routes" text, "bicycle_routes" text, "layer" bigint, "z_order" bigint, "minzoom" bigint, "tags" hstore, "length" float, "way" geometry(Linestring,3857)) with oids
+alter table planet_20190506_highway set (autovacuum_enabled=false)
+create table planet_20190506_building ("osm_id" bigint, "quadtree" bigint, "tile" bigint, "access" text, "addr:housename" text, "addr:housenumber" text, "addr:interpolation" text, "admin_level" text, "aerialway" text, "aeroway" text, "amenity" text, "barrier" text, "bicycle" text, "boundary" text, "bridge" text, "building" text, "construction" text, "covered" text, "embankment" text, "foot" text, "highway" text, "historic" text, "horse" text, "junction" text, "landuse" text, "leisure" text, "lock" text, "man_made" text, "military" text, "name" text, "natural" text, "oneway" text, "place" text, "power" text, "railway" text, "ref" text, "religion" text, "route" text, "service" text, "shop" text, "surface" text, "tourism" text, "tracktype" text, "tunnel" text, "water" text, "waterway" text, "layer" bigint, "z_order" bigint, "minzoom" bigint, "tags" hstore, "way_area" float, "way" geometry(Geometry,3857)) with oids
+alter table planet_20190506_building set (autovacuum_enabled=false)
+create table planet_20190506_boundary ("osm_id" bigint, "quadtree" bigint, "tile" bigint, "admin_level" text, "boundary" text, "name" text, "ref" text, "minzoom" bigint, "way_area" float, "way" geometry(Geometry,3857)) with oids
+alter table planet_20190506_boundary set (autovacuum_enabled=false)
+  402432 99.9%  22018.4s [    DBDBBBAAADAADC]: 67307225 165985843 394365076  3906271
+  MakeGeometries[0]: wait= 3458.4s, exec=  901.0s, call cb=17864.5s
+PostgisWriter done
+  402713100.0% MakeGeometries[1]: wait= 3523.3s, exec=  902.8s, call cb=17797.8s
+ 22327.9s [             DDDDD]: 67361329 166027653 394466882  3913114MakeGeometries[2]: wait= 3478.3s, exec=  900.7s, call cb=17844.5s
+MakeGeometries[3]: wait= 3525.5s, exec=  909.7s, call cb=17788.6s
+MultiPolygons: wait=  178.0s, exec= 4268.0s, call cb=17696.4s
+HandleRelations: wait=  179.2s, exec=  156.9s, call cb=21796.4s
+AddParentTags: wait=  473.8s, exec=  652.3s, call cb=21050.8s
+
+total: 22328.0s [6h12m08s]
+
+create index planet_20190506_point_way on planet_20190506_point using gist(way)                                                                         1708.8s
+create index planet_20190506_line_way on planet_20190506_line using gist(way)                                                                           1046.5s
+create index planet_20190506_highway_way on planet_20190506_highway using gist(way)                                                                     4352.0s
+create index planet_20190506_boundary_way on planet_20190506_boundary using gist(way)                                                                    123.4s
+create index planet_20190506_highway_way_lz on planet_20190506_highway using gist(way) where ( highway in ('motorway','motorway_link','trunk','trunk_l   705.9s
+create index planet_20190506_point_id on planet_20190506_point using btree(osm_id)                                                                       230.1s
+create index planet_20190506_line_id on planet_20190506_line using btree(osm_id)                                                                         168.4s
+create index planet_20190506_highway_id on planet_20190506_highway using btree(osm_id)                                                                   759.4s
+create index planet_20190506_boundary_id on planet_20190506_boundary using btree(osm_id)                                                                  13.2s
+alter table planet_20190506_point set (autovacuum_enabled=true)                                                                                            0.1s
+alter table planet_20190506_line set (autovacuum_enabled=true)                                                                                             0.0s
+alter table planet_20190506_highway set (autovacuum_enabled=true)                                                                                          0.0s
+alter table planet_20190506_boundary set (autovacuum_enabled=true)                                                                                         0.0s
+vacuum analyze planet_20190506_point                                                                                                                    1406.5s
+vacuum analyze planet_20190506_line                                                                                                                      443.6s
+vacuum analyze planet_20190506_highway                                                                                                                  1578.8s
+vacuum analyze planet_20190506_boundary                                                                                                                   75.6s
+created indices in  12612.4s

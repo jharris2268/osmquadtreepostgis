@@ -810,9 +810,13 @@ class PackCsvBlocksTableBinary : public PackCsvBlocksTableBase {
                         current[i] = std::make_pair(true, pack_pg_int(col.type, ele->MinZoom()));
                     }
                 } else if (col.source == ColumnSource::Geometry) {
-                    current[i] = std::make_pair(true,gg.first);
+                    if (!gg.first.empty()) {
+                        current[i] = std::make_pair(true, gg.first);
+                    }
                 } else if (col.source == ColumnSource::RepresentativePointGeometry) {
-                    current[i] = std::make_pair(true, gg.second);
+                    if (!gg.second.empty()) {
+                        current[i] = std::make_pair(true, gg.second);
+                    }
                 }
                 
             }
@@ -850,13 +854,16 @@ class PackCsvBlocksTableBinary : public PackCsvBlocksTableBase {
                         current[i]=std::make_pair(true, pack_pg_int(col.type, ele->ZOrder()));
                     }
                 } else if (col.source == ColumnSource::Length) {
-                    current[i]=std::make_pair(true, pack_pg_double(col.type, round(ele->Length()*10)/10));
+                    current[i]=std::make_pair(true, pack_pg_double(col.type, round(ele->Length()*10.0)/10.0));
                     
                 } else if (col.source == ColumnSource::Geometry) {
-                    current[i] = std::make_pair(true, gg.first);
+                    if (!gg.first.empty()) {
+                        current[i] = std::make_pair(true, gg.first);
+                    }
                 } else if (col.source == ColumnSource::RepresentativePointGeometry) {
-                    
-                    current[i] = std::make_pair(true, gg.second);
+                    if (!gg.second.empty()) {
+                        current[i] = std::make_pair(true, gg.second);
+                    }
                 }
                 
             }
@@ -893,13 +900,16 @@ class PackCsvBlocksTableBinary : public PackCsvBlocksTableBase {
                         current[i]=std::make_pair(true, pack_pg_int(col.type, ele->ZOrder()));
                     }
                 } else if (col.source == ColumnSource::Area) {
-                    current[i]=std::make_pair(true, pack_pg_double(col.type, round(ele->Area()*10)/10));
+                    current[i]=std::make_pair(true, pack_pg_double(col.type, round(ele->Area()*10.0)/10.0));
                     
                 } else if (col.source == ColumnSource::Geometry) {
-                    current[i] = std::make_pair(true, gg.first);
+                    if (!gg.first.empty()) {
+                        current[i] = std::make_pair(true, gg.first);
+                    }
                 } else if (col.source == ColumnSource::RepresentativePointGeometry) {
-                    
-                    current[i] = std::make_pair(true, gg.second);
+                    if (!gg.second.empty()) {
+                        current[i] = std::make_pair(true, gg.second);
+                    }
                 }
                 
             }
@@ -937,13 +947,17 @@ class PackCsvBlocksTableBinary : public PackCsvBlocksTableBase {
                         current[i]=std::make_pair(true, pack_pg_int(col.type, ele->ZOrder()));
                     }
                 } else if (col.source == ColumnSource::Area) {
-                    current[i]=std::make_pair(true, pack_pg_double(col.type, round(ele->Area()*10)/10));
+                    current[i]=std::make_pair(true, pack_pg_double(col.type, round(ele->Area()*10.0)/10.0));
                     
                 } else if (col.source == ColumnSource::Geometry) {
-                    current[i] = std::make_pair(true, gg.first);
+                    if (!gg.first.empty()) {
+                        current[i] = std::make_pair(true, gg.first);
+                    }
                 } else if (col.source == ColumnSource::RepresentativePointGeometry) {
+                    if (!gg.second.empty()) {
+                        current[i] = std::make_pair(true, gg.second);
+                    }
                     
-                    current[i] = std::make_pair(true, gg.second);
                 }
                 
             }
@@ -982,13 +996,16 @@ class PackCsvBlocksTableBinary : public PackCsvBlocksTableBase {
                     }
                 } else if (col.source == ColumnSource::Area) {
                     double a = ele->Parts().at(part).area;
-                    current[i]=std::make_pair(true, pack_pg_double(col.type, round(a*10)/10));
+                    current[i]=std::make_pair(true, pack_pg_double(col.type, round(a*10.0)/10.0));
                     
                 } else if (col.source == ColumnSource::Geometry) {
-                    current[i] = std::make_pair(true, gg.first);
+                    if (!gg.first.empty()) {
+                        current[i] = std::make_pair(true, gg.first);
+                    }
                 } else if (col.source == ColumnSource::RepresentativePointGeometry) {
-                    
-                    current[i] = std::make_pair(true, gg.second);
+                    if (!gg.second.empty()) {
+                        current[i] = std::make_pair(true, gg.second);
+                    }
                 }
                 
             }

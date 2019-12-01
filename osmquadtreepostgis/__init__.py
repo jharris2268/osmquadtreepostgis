@@ -85,7 +85,6 @@ def postgis_columns(style, add_min_zoom, extended=False, extra_node_cols=None, e
     
     poly_cols = [
         opg.GeometryColumnSpec("osm_id", opg.GeometryColumnType.BigInteger, opg.GeometryColumnSource.OsmId),
-        #opg.GeometryColumnSpec("part", opg.GeometryColumnType.BigInteger, opg.GeometryColumnSource.Part),
         opg.GeometryColumnSpec("quadtree", opg.GeometryColumnType.BigInteger, opg.GeometryColumnSource.ObjectQuadtree),
         opg.GeometryColumnSpec("tile", opg.GeometryColumnType.BigInteger, opg.GeometryColumnSource.BlockQuadtree),
     ]
@@ -102,10 +101,8 @@ def postgis_columns(style, add_min_zoom, extended=False, extra_node_cols=None, e
     poly_cols.append(opg.GeometryColumnSpec('way_area', opg.GeometryColumnType.Double, opg.GeometryColumnSource.Area))
     poly_cols.append(opg.GeometryColumnSpec('way', opg.GeometryColumnType.Geometry, opg.GeometryColumnSource.Geometry))
     
-    if extended:
-        poly_cols.append(opg.GeometryColumnSpec('way_point', opg.GeometryColumnType.PointGeometry, opg.GeometryColumnSource.RepresentativePointGeometry))
-    
-    
+    poly_cols.append(opg.GeometryColumnSpec('way_point', opg.GeometryColumnType.PointGeometry, opg.GeometryColumnSource.RepresentativePointGeometry))
+        
     point = opg.GeometryTableSpec("point")
     point.set_columns(point_cols)
     
@@ -115,50 +112,19 @@ def postgis_columns(style, add_min_zoom, extended=False, extra_node_cols=None, e
     polygon = opg.GeometryTableSpec("polygon")
     polygon.set_columns(poly_cols)
     
-    if extended:
-        highway=opg.GeometryTableSpec('highway')
-        highway.set_columns(line_cols)
-        
-        building=opg.GeometryTableSpec('building')
-        building.set_columns(poly_cols[:-1])
-        
-        boundary=opg.GeometryTableSpec('boundary')
-        boundary.set_columns([p for p in poly_cols if p.name in ('osm_id','part','quadtree','tile','boundary','admin_level','name','ref', 'minzoom','way_area','way')])
-        return [point,line,polygon,highway,building,boundary]
-    return [point,line,polygon]
-
-def make_polypoint_view(curs, table_prfx):
-    curs.execute("select * from %s_polygon limit 0" % table_prfx)
-    cols=", ".join('"%s"' % c[0] for c in curs.description if not (c[0]=='way' or c[1]=='way_point'))
     
-    return "create view %%ZZ%%_polypoint as select %s, way_point as way from %%ZZ%%_polygon" % cols
+    highway=opg.GeometryTableSpec('highway')
+    highway.set_columns(line_cols)
     
+    building=opg.GeometryTableSpec('building')
+    building.set_columns(poly_cols[:-1])
+    
+    boundary=opg.GeometryTableSpec('boundary')
+    boundary.set_columns([p for p in poly_cols if p.name in ('osm_id','part','quadtree','tile','boundary','admin_level','name','ref', 'minzoom','way_area','way')])
+    return [point,line,polygon,highway,building,boundary]
     
 
-def has_mem(ct,k):
-    for a,b,c,d in ct:
-        if k==a:
-            return True
-    return False
-def make_tag_cols(coltags):
-    common = [("osm_id","bigint"),("tile","bigint"), ("quadtree","bigint")]
-
-    post = []
-    if has_mem(coltags,'*'):
-        #post.append(('other_tags','jsonb'))
-        post.append(('other_tags','hstore'))
-    elif has_mem(coltags, 'XXX'):
-        #post.append(('tags', 'jsonb'))
-        post.append(('tags', 'hstore'))
-    if has_mem(coltags, 'layer'):
-        post.append(('layer','int'))
-    if has_mem(coltags,'minzoom'):
-        post.append(('minzoom','integer'))
-    point = common+[(a,"text" ) for a,b,c,d in coltags if b and not a in ("*","minzoom",'XXX','layer')]+post+[("way","geometry(Point,3857)")]
-    line = common+[(a,"text") for a,b,c,d in coltags if c and not a in ("*","minzoom",'XXX','layer')]+post+[('z_order','int'),('length','float'),("way","geometry(LineString,3857)")]
-    poly = common[:1]+[('part','int')]+common[1:]+[(a,"text") for a,b,c,d in coltags if d and not a in ("*","minzoom",'XXX','layer')]+post+[('z_order','int'),('way_area','float'),("way","geometry(Polygon,3857)")]
     
-    return point,line,poly
     
     
 def type_str(ct):
@@ -205,25 +171,6 @@ def create_tables(curs, table_prfx,coltags):
 
 
 
-
-def create_indices(curs, table_prfx, extraindices=False, vacuum=False, planet=False):
-    write_indices(curs,table_prfx,indices)
-    
-    
-    
-    if extraindices:
-        write_indices(curs,table_prfx,extras)
-        
-            
-        
-    if planet:
-        write_indices(curs,table_prfx,planetosm)
-        
-    
-    if vacuum:
-        write_indices(curs,table_prfx,vacuums)
-        if extraindices:
-            write_indices(curs,table_prfx,vacuums_extra)
             
 def write_indices(curs,table_prfx, inds):
     ist=time.time()
@@ -241,62 +188,6 @@ def write_indices(curs,table_prfx, inds):
     
     print("created indices in %8.1fs" % (time.time()-ist))
 
-indices = [
-"""CREATE TABLE %ZZ%roads AS
-    SELECT osm_id,null as part,tile,quadtree,name,ref,admin_level,highway,railway,boundary,
-            service,tunnel,bridge,z_order,covered,surface, minzoom, way
-        FROM %ZZ%line
-        WHERE highway in (
-            'secondary','secondary_link','primary','primary_link',
-            'trunk','trunk_link','motorway','motorway_link')
-        OR railway is not null
-
-    UNION SELECT osm_id,part,tile,quadtree,name,null as ref, admin_level,null as highway,
-            null as railway, boundary, null as service,
-            null as tunnel,null as bridge, 0  as z_order,null as covered,null as surface,minzoom, 
-            st_exteriorring(way) as way
-        FROM %ZZ%polygon WHERE
-            osm_id<0 and boundary='administrative'""",
-"CREATE INDEX %ZZ%point_way         ON %ZZ%point    USING gist  (way)",
-"CREATE INDEX %ZZ%line_way          ON %ZZ%line     USING gist  (way)",
-"CREATE INDEX %ZZ%polygon_way       ON %ZZ%polygon  USING gist  (way)",
-"CREATE INDEX %ZZ%roads_way         ON %ZZ%roads    USING gist  (way)",]
-
-vacuums = [
-"vacuum analyze %ZZ%point",
-"vacuum analyze %ZZ%line",
-"vacuum analyze %ZZ%polygon",
-"vacuum analyze %ZZ%roads",]
-
-extras = [
-"CREATE INDEX %ZZ%point_osmid       ON %ZZ%point    USING btree (osm_id)",
-"CREATE INDEX %ZZ%line_osmid        ON %ZZ%line     USING btree (osm_id)",
-"CREATE INDEX %ZZ%polygon_osmid     ON %ZZ%polygon  USING btree (osm_id)",
-"CREATE INDEX %ZZ%roads_osmid       ON %ZZ%roads    USING btree (osm_id)",
-"CREATE INDEX %ZZ%roads_admin       ON %ZZ%roads    USING gist  (way) WHERE boundary = 'administrative'",
-"CREATE INDEX %ZZ%roads_roads_ref   ON %ZZ%roads    USING gist  (way) WHERE highway IS NOT NULL AND ref IS NOT NULL",
-"CREATE INDEX %ZZ%roads_admin_low   ON %ZZ%roads    USING gist  (way) WHERE boundary = 'administrative' AND admin_level IN ('0', '1', '2', '3', '4')",
-"CREATE INDEX %ZZ%line_ferry        ON %ZZ%line     USING gist  (way) WHERE route = 'ferry'",
-"CREATE INDEX %ZZ%line_river        ON %ZZ%line     USING gist  (way) WHERE waterway = 'river'",
-"CREATE INDEX %ZZ%line_name         ON %ZZ%line     USING gist  (way) WHERE name IS NOT NULL",
-"CREATE INDEX %ZZ%polygon_military  ON %ZZ%polygon  USING gist  (way) WHERE landuse = 'military'",
-"CREATE INDEX %ZZ%polygon_nobuilding ON %ZZ%polygon USING gist  (way) WHERE building IS NULL",
-"CREATE INDEX %ZZ%polygon_name      ON %ZZ%polygon  USING gist  (way) WHERE name IS NOT NULL",
-"CREATE INDEX %ZZ%polygon_way_area_z6 ON %ZZ%polygon USING gist (way) WHERE way_area > 59750",
-"CREATE INDEX %ZZ%point_place       ON %ZZ%point    USING gist  (way) WHERE place IS NOT NULL AND name IS NOT NULL",
-"create view %ZZ%highway as (select * from %ZZ%line where z_order is not null and z_order!=0)",
-"""create table %ZZ%boundary as (select osm_id,part,tile,quadtree,name,admin_level,boundary,minzoom, 
-            st_exteriorring(way) as way from %ZZ%polygon where osm_id<0 and boundary='administrative')""",
-"create view %ZZ%building as (select * from %ZZ%polygon where building is not null and building != 'no')",
-"create index %ZZ%highway_view on %ZZ%line using gist (way) where z_order is not null and z_order!=0",
-"create index %ZZ%boundary_view on %ZZ%boundary using gist (way)",
-"create index %ZZ%building_view on %ZZ%polygon using gist (way) where building is not null and building != 'no'",
-
-
-]
-vacuums_extra = [
-'vacuum analyze %ZZ%boundary',
-]
 
 planetosm = [
 "drop view if exists planet_osm_point",
@@ -308,9 +199,9 @@ planetosm = [
 "drop view if exists planet_osm_boundary",
 "create view planet_osm_point as (select * from %ZZ%point)",
 "create view planet_osm_line as (select * from %ZZ%line union all select * from %ZZ%highway)",
-"create view planet_osm_polygon as (select * from %ZZ%polygon union all select * from %ZZ%building)",
+#"create view planet_osm_polygon as (select * from %ZZ%polygon union all select * from %ZZ%building)",
 """create table planet_osm_roads as (
-    SELECT osm_id,null as part,tile,quadtree,name,ref,admin_level,highway,railway,boundary,
+    SELECT osm_id,tile,quadtree,name,ref,admin_level,highway,railway,boundary,
             service,tunnel,bridge,z_order,covered,surface, minzoom, way
         FROM %ZZ%highway
         WHERE highway in (
@@ -320,7 +211,7 @@ planetosm = [
 
     UNION ALL
     
-    SELECT osm_id,part,tile,quadtree,name,null as ref, admin_level,null as highway,
+    SELECT osm_id,tile,quadtree,name,null as ref, admin_level,null as highway,
             null as railway, boundary, null as service,
             null as tunnel,null as bridge, 0  as z_order,null as covered,null as surface,minzoom, 
             st_exteriorring(way) as way
@@ -333,54 +224,89 @@ planetosm = [
 "create view planet_osm_highway as (select * from %ZZ%highway)",
 "create view planet_osm_building as (select * from %ZZ%building)",
 "create view planet_osm_boundary as (select * from %ZZ%boundary)",
-
+"create view planet_osm_polygon_point as select * from planet_20190506_polygon_point",
 
 ]
 
-extended_indices = [
+extended_indices_pointline = [
 "create index %ZZ%point_way on %ZZ%point using gist(way)",
 "create index %ZZ%line_way on %ZZ%line using gist(way)",
-"create index %ZZ%polygon_way on %ZZ%polygon using gist(way)",
+
 "create index %ZZ%highway_way on %ZZ%highway using gist(way)",
-"create index %ZZ%building_way on %ZZ%building using gist(way)",
-"create index %ZZ%boundary_way on %ZZ%boundary using gist(way)",
 """create index %ZZ%highway_way_lz on %ZZ%highway using gist(way) where (
     highway in ('motorway','motorway_link','trunk','trunk_link','primary','primary_link','secondary')
     or (railway in ('rail','light_rail','narrow_gauge','funicular') and (service IS NULL OR service NOT IN ('spur', 'siding', 'yard')))
 )""",
-"create index %ZZ%polygon_way_point on %ZZ%polygon using gist(way_point)",
 "create index %ZZ%point_id on %ZZ%point using btree(osm_id)",
 "create index %ZZ%line_id on %ZZ%line using btree(osm_id)",
-"create index %ZZ%polygon_id on %ZZ%polygon using btree(osm_id)",
 "create index %ZZ%highway_id on %ZZ%highway using btree(osm_id)",
-"create index %ZZ%building_id on %ZZ%building using btree(osm_id)",
-"create index %ZZ%boundary_id on %ZZ%boundary using btree(osm_id)",
-
 "alter table %ZZ%point set (autovacuum_enabled=true)",
 "alter table %ZZ%line set (autovacuum_enabled=true)",
-"alter table %ZZ%polygon set (autovacuum_enabled=true)",
 "alter table %ZZ%highway set (autovacuum_enabled=true)",
-"alter table %ZZ%building set (autovacuum_enabled=true)",
-"alter table %ZZ%boundary set (autovacuum_enabled=true)",
 "vacuum analyze %ZZ%point",
 "vacuum analyze %ZZ%line",
-"vacuum analyze %ZZ%polygon",
 "vacuum analyze %ZZ%highway",
+
+"create view %ZZ%json_point as select osm_id,quadtree,tile,jsonb_strip_nulls(row_to_json(pp)::jsonb - 'osm_id' - 'quadtree' - 'tile' - 'tags' - 'minzoom' - 'way') || tags::jsonb as properties, minzoom, way from %ZZ%point pp",
+"create view %ZZ%json_line as select osm_id,quadtree,tile,jsonb_strip_nulls(row_to_json(pp)::jsonb - 'osm_id' - 'quadtree' - 'tile' - 'tags' - 'z_order' - 'minzoom' - 'way') || tags::jsonb as properties, z_order, minzoom, way from %ZZ%line pp",
+"create view %ZZ%json_highway as select osm_id,quadtree,tile,jsonb_strip_nulls(row_to_json(pp)::jsonb - 'osm_id' - 'quadtree' - 'tile' - 'tags' - 'z_order' - 'minzoom' - 'way') || tags::jsonb as properties, z_order, minzoom, way from %ZZ%highway pp",
+]
+
+extended_indices_polygon = [
+"create index %ZZ%polygon_way on %ZZ%polygon using gist(way)",
+"create index %ZZ%building_way on %ZZ%building using gist(way)",
+"create index %ZZ%boundary_way on %ZZ%boundary using gist(way)",
+"create index %ZZ%polygon_way_point on %ZZ%polygon using gist(way_point) where way_point is not null",
+"create index %ZZ%polygon_id on %ZZ%polygon using btree(osm_id)",
+"create index %ZZ%building_id on %ZZ%building using btree(osm_id)",
+"create index %ZZ%boundary_id on %ZZ%boundary using btree(osm_id)",
+"alter table %ZZ%polygon set (autovacuum_enabled=true)",
+"alter table %ZZ%building set (autovacuum_enabled=true)",
+"alter table %ZZ%boundary set (autovacuum_enabled=true)",
+"vacuum analyze %ZZ%polygon",
 "vacuum analyze %ZZ%building",
 "vacuum analyze %ZZ%boundary",
 
-
+"create view %ZZ%json_polygon as select osm_id,quadtree,tile,jsonb_strip_nulls(row_to_json(pp)::jsonb - 'osm_id' - 'quadtree' - 'tile' - 'tags' - 'z_order' - 'minzoom' - 'way_area' - 'way' - 'way_point') || tags::jsonb as properties, z_order, minzoom, way_area, way, way_point from %ZZ%polygon pp",
+"create view %ZZ%json_building as select osm_id,quadtree,tile,jsonb_strip_nulls(row_to_json(pp)::jsonb - 'osm_id' - 'quadtree' - 'tile' - 'tags' - 'z_order' - 'minzoom' - 'way_area' - 'way') || tags::jsonb as properties, z_order, minzoom, way_area, way from %ZZ%building pp",
+"create view %ZZ%json_boundary as select osm_id,quadtree,tile,jsonb_strip_nulls(row_to_json(pp)::jsonb - 'osm_id' - 'quadtree' - 'tile' - 'minzoom' - 'way_area' - 'way') as properties, minzoom, way_area, way from %ZZ%boundary pp",
+"create view %ZZ%polygon_exterior as select * from %ZZ%polygon",
 ]
 
+def find_polygon_cols(curs, table_prfx,skip=set(['way','way_point'])):
+    curs.execute("select * from %spolygon limit 0" % table_prfx)
+    return ", ".join('"%s"' % c[0] for c in curs.description if not c[0] in skip)
 
+    
 
-def create_tables_lowzoom(curs, prfx, newprefix, minzoom, simp=None, cols=None, extended=False):
+def write_extended_indices_pointline(curs, table_prfx):
+    
+    write_indices(curs, table_prfx, extended_indices_pointline)
+    
+def write_extended_indices_polygon(curs, table_prfx):
+    
+    poly_cols = find_polygon_cols(curs, table_prfx)
+    
+    inds = extended_indices_polygon[:]    
+    inds.append("create view %ZZ%polygon_point as select "+poly_cols+", way_point as way from %ZZ%polygon where way_point is not null")
+    
+    write_indices(curs, table_prfx, inds)
+    
+def write_planetosm_views(curs, table_prfx):
+    inds = planetosm[:]
+    roadspp = min(i for i,ind in enumerate(inds) if not 'drop' in ind and 'planet_osm_roads' in ind)
+    
+    poly_cols = find_polygon_cols(curs, table_prfx,set(['way_point']))
+    
+    inds.insert(roadspp, "create view planet_osm_polygon as (select "+poly_cols+" from %ZZ%polygon union all select "+poly_cols+" from %ZZ%building)")
+    
+    write_indices(curs, table_prfx, inds)
+
+def create_tables_lowzoom(curs, prfx, newprefix, minzoom, simp=None, cols=None,table_names=None, polygonpoint=True):
     
     
     queries = []
-    
-    table_names = ["point", "line", "polygon","roads"]
-    if extended:
+    if table_names is None:
         table_names = ["point", "line", "polygon","boundary","highway","building"]
     
     for tab in table_names:
@@ -412,54 +338,48 @@ def create_tables_lowzoom(curs, prfx, newprefix, minzoom, simp=None, cols=None, 
              " where minzoom <= "+str(minzoom)+")")
              
     
-    if extended:
-        for tab in table_names:
-            queries.append("create index %ZZ%" + tab +"_way on %ZZ%" + tab +" using gist(way)")
-            queries.append("create index %ZZ%" + tab +"_id on %ZZ%" + tab +" using btree(osm_id)")
-        for tab in table_names:
-            queries.append("vacuum analyze %ZZ%" + tab)
+    for tab in table_names:
+        queries.append("create index %ZZ%" + tab +"_way on %ZZ%" + tab +" using gist(way)")
+        queries.append("create index %ZZ%" + tab +"_id on %ZZ%" + tab +" using btree(osm_id)")
+    
+    if polygonpoint:
+        cols=find_polygon_cols(curs, prfx)
+        queries.append("create view %ZZ%polygon_point as select "+cols+", way_point as way from %ZZ%polygon where way_point is not null")
+        queries.append("create index %ZZ%polygon_waypoint on %ZZ%polygon using gist(way_point) where way_point is not null")
+    
+        queries.append("create view %ZZ%polygon_exterior as select * from %ZZ%polygon")
+
+    for tab in table_names:
+        queries.append("vacuum analyze %ZZ%" + tab)
         
-    else:
-        queries += indices[1:]
-        queries += extras
-        queries += vacuums
-        queries += vacuums_extra
     
     print("call %d queries..." % len(queries))
     write_indices(curs,newprefix,queries)
     
     
-def create_views_lowzoom(curs, prfx, newprefix, minzoom, indicies=True,extended=False):
+def create_views_lowzoom(curs, prfx, newprefix, minzoom, indices=True, table_names=None):
     
     
     
     queries=[]
+    if table_names is None:
+        table_names=["point", "line", "polygon","highway", "building", "boundary","polygon_point","polygon_exterior"]
     
-    if extended:
-        for tab in ("point", "line", "polygon","highway", "building", "boundary"):
-            queries.append("drop view if exists %ZZ%"+tab)
-            queries.append("create view %ZZ%"+tab+" as (select * from "+prfx+tab+" where minzoom <= "+str(minzoom)+")")
-            if indices:
-                queries.append("create index %ZZ%"+tab+"_way on "+prfx+tab+" using gist(way) where minzoom <= "+str(minzoom))
-                
-        
-        
-    else:
+    for tab in table_names:
+        queries.append("drop view if exists %ZZ%"+tab)
+        queries.append("create view %ZZ%"+tab+" as (select * from "+prfx+tab+" where minzoom <= "+str(minzoom)+")")
+        if indices and not '_' in tab:
+            queries.append("drop index if exists %ZZ%"+tab+"_way")
+            queries.append("create index %ZZ%"+tab+"_way on "+prfx+tab+" using gist(way) where minzoom <= "+str(minzoom))
+    if indices and 'polygon_point' in table_names:
+        queries.append("drop index if exists %ZZ%polygon_waypoint")
+        queries.append("create index %ZZ%polygon_waypoint on "+prfx+"polygon using gist(way_point) where way_point is not null and minzoom <= "+str(minzoom))
     
-        for tab in ("point", "line", "polygon","roads", "highway", "building", "boundary"):
-            queries.append("drop view if exists %ZZ%"+tab)
-            queries.append("create view %ZZ%"+tab+" as (select * from "+prfx+tab+" where minzoom <= "+str(minzoom)+")")
-        
-        if indicies:
-            for tab in ("point", "line", "polygon","roads","boundary"):
-                queries.append("create index %ZZ%"+tab+"_way on "+prfx+tab+" using gist(way) where minzoom <= "+str(minzoom))
-            
-            queries.append("create index %ZZ%highway_way on "+prfx+"line using gist (way) where z_order is not null and z_order!=0 and minzoom <= "+str(minzoom))
-            queries.append("create index %ZZ%building_view on "+prfx+"polygon using gist (way) where building is not null and building != 'no' and minzoom <= "+str(minzoom))
     write_indices(curs,newprefix,queries)
-    
 
-def write_to_postgis(prfx, box_in,connstr, tabprfx, stylefn=None, writeindices=True, lastdate=None,minzoom=None,nothread=False, numchan=4, minlen=0,minarea=5,extraindices=False,use_binary=True, extended=False):
+
+
+def write_to_postgis(prfx, box_in,connstr, tabprfx, stylefn=None, writeindices=True, lastdate=None,minzoom=None,nothread=False, numchan=4, minlen=0,minarea=5,use_binary=True):
     if not connstr or not tabprfx:
         raise Exception("must specify connstr and tabprfx")
         
@@ -471,10 +391,10 @@ def write_to_postgis(prfx, box_in,connstr, tabprfx, stylefn=None, writeindices=T
     postgisparams = opg.PostgisParameters()
     
     #params.coltags = sorted((k,v.IsNode,v.IsWay,v.IsWay) for k,v in params.style.items() if k not in ('z_order','way_area'))
-    postgisparams.coltags = postgis_columns(style, params.findmz is not None, extended)
-    if extended:
-        postgisparams.alloc_func='extended'
-        postgisparams.validate_geometry = True
+    postgisparams.coltags = postgis_columns(style, params.findmz is not None, extended=True)
+    
+    postgisparams.alloc_func='extended'
+    postgisparams.validate_geometry = True
     
     if tabprfx and not tabprfx.endswith('_'):
         tabprfx = tabprfx+'_'
@@ -496,12 +416,10 @@ def write_to_postgis(prfx, box_in,connstr, tabprfx, stylefn=None, writeindices=T
         errs = opg.process_geometry_postgis(params, postgisparams, None)#Prog(locs=params.locs))
         
     if writeindices and postgisparams.connstring!='null':
-        if extended:
-            write_indices(conn.cursor(),postgisparams.tableprfx, extended_indices)
-        else:
-            create_indices(conn.cursor(), postgisparams.tableprfx, extraindices, extraindices)
-            write_indices(conn.cursor(), postgisparams.tableprfx, [make_polypoint_view(conn.cursor(), postgisparams.tableprfx)])
-
+        
+        write_extended_indices_pointline(conn.cursor(), postgisparams.tableprfx)
+        write_extended_indices_polygon(conn.cursor(), postgisparams.tableprfx)
+        
     return errs
 
 class CsvWriter:
@@ -546,7 +464,7 @@ class CsvWriter:
             self.num[k] += len(v)
             
     
-def write_to_csvfile(prfx, box_in,outfnprfx,  stylefn=None, lastdate=None,minzoom=None,nothread=False, numchan=4, minlen=0,minarea=5, use_binary=True,extended=False):
+def write_to_csvfile(prfx, box_in,outfnprfx,  stylefn=None, lastdate=None,minzoom=None,nothread=False, numchan=4, minlen=0,minarea=5, use_binary=True):
     
     params,style = process.prep_geometry_params(prfx, box_in, stylefn, lastdate, minzoom, numchan, minlen, minarea)
     
@@ -555,8 +473,7 @@ def write_to_csvfile(prfx, box_in,outfnprfx,  stylefn=None, lastdate=None,minzoo
     
     postgisparams=opg.PostgisParameters()
     postgisparams.coltags = postgis_columns(style, params.findmz is not None, extended)
-    if extended:
-        postgisparams.alloc_func='extended'
+    postgisparams.alloc_func='extended'
     postgisparams.use_binary=use_binary
     
     
