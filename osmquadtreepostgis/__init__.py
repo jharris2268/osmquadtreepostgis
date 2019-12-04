@@ -224,7 +224,7 @@ planetosm = [
 "create view planet_osm_highway as (select * from %ZZ%highway)",
 "create view planet_osm_building as (select * from %ZZ%building)",
 "create view planet_osm_boundary as (select * from %ZZ%boundary)",
-"create view planet_osm_polygon_point as select * from planet_20190506_polygon_point",
+"create view planet_osm_polygon_point as select * from planet_%ZZ%_polygon_point",
 
 ]
 
@@ -378,6 +378,10 @@ def create_views_lowzoom(curs, prfx, newprefix, minzoom, indices=True, table_nam
     write_indices(curs,newprefix,queries)
 
 
+def get_db_conn(connstring):
+    conn=psycopg2.connect(connstring)
+    conn.autocommit=True
+    return conn
 
 def write_to_postgis(prfx, box_in,connstr, tabprfx, stylefn=None, writeindices=True, lastdate=None,minzoom=None,nothread=False, numchan=4, minlen=0,minarea=5,use_binary=True):
     if not connstr or not tabprfx:
@@ -402,11 +406,10 @@ def write_to_postgis(prfx, box_in,connstr, tabprfx, stylefn=None, writeindices=T
     postgisparams.connstring = connstr
     postgisparams.use_binary=use_binary
     
-    conn=None
+    
     if postgisparams.connstring!='null':
-        conn=psycopg2.connect(postgisparams.connstring)
-        conn.autocommit=True
-        create_tables(conn.cursor(), postgisparams.tableprfx, postgisparams.coltags)
+        with get_db_conn(postgisparams.connstring) as conn:
+            create_tables(conn.cursor(), postgisparams.tableprfx, postgisparams.coltags)
     
         
     cnt,errs=None,None
@@ -416,9 +419,9 @@ def write_to_postgis(prfx, box_in,connstr, tabprfx, stylefn=None, writeindices=T
         errs = opg.process_geometry_postgis(params, postgisparams, None)#Prog(locs=params.locs))
         
     if writeindices and postgisparams.connstring!='null':
-        
-        write_extended_indices_pointline(conn.cursor(), postgisparams.tableprfx)
-        write_extended_indices_polygon(conn.cursor(), postgisparams.tableprfx)
+        with get_db_conn(postgisparams.connstring) as conn:
+            write_extended_indices_pointline(conn.cursor(), postgisparams.tableprfx)
+            write_extended_indices_polygon(conn.cursor(), postgisparams.tableprfx)
         
     return errs
 
