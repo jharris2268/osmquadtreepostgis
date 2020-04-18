@@ -153,10 +153,14 @@ def prep_table_create(prfx, ts):
     
     
 
-def create_tables(curs, table_prfx,coltags):
+def drop_tables(curs, table_prfx):
     for t in ('point','line','polygon','roads','boundary','building','highway'):
         curs.execute("drop table if exists "+table_prfx+t+" cascade" )
     
+    
+    
+def create_tables(curs, table_prfx,coltags):
+    drop_tables(curs, table_prfx)
     
     for ct in coltags:
         create = prep_table_create(table_prfx, ct)
@@ -197,6 +201,7 @@ planetosm = [
 "drop view if exists planet_osm_highway",
 "drop view if exists planet_osm_building",
 "drop view if exists planet_osm_boundary",
+"drop view if exists planet_osm_polygon_point",
 "create view planet_osm_point as (select * from %ZZ%point)",
 "create view planet_osm_line as (select * from %ZZ%line union all select * from %ZZ%highway)",
 #"create view planet_osm_polygon as (select * from %ZZ%polygon union all select * from %ZZ%building)",
@@ -224,25 +229,27 @@ planetosm = [
 "create view planet_osm_highway as (select * from %ZZ%highway)",
 "create view planet_osm_building as (select * from %ZZ%building)",
 "create view planet_osm_boundary as (select * from %ZZ%boundary)",
-"create view planet_osm_polygon_point as select * from planet_%ZZ%_polygon_point",
+"create view planet_osm_polygon_point as select * from %ZZ%polygon_point",
 
 ]
 
 extended_indices_pointline = [
 "create index %ZZ%point_way on %ZZ%point using gist(way)",
 "create index %ZZ%line_way on %ZZ%line using gist(way)",
-
 "create index %ZZ%highway_way on %ZZ%highway using gist(way)",
 """create index %ZZ%highway_way_lz on %ZZ%highway using gist(way) where (
     highway in ('motorway','motorway_link','trunk','trunk_link','primary','primary_link','secondary')
     or (railway in ('rail','light_rail','narrow_gauge','funicular') and (service IS NULL OR service NOT IN ('spur', 'siding', 'yard')))
 )""",
+
 "create index %ZZ%point_id on %ZZ%point using btree(osm_id)",
 "create index %ZZ%line_id on %ZZ%line using btree(osm_id)",
 "create index %ZZ%highway_id on %ZZ%highway using btree(osm_id)",
-"alter table %ZZ%point set (autovacuum_enabled=true)",
-"alter table %ZZ%line set (autovacuum_enabled=true)",
-"alter table %ZZ%highway set (autovacuum_enabled=true)",
+
+"create index %ZZ%point_name on %ZZ%point using gin(name gin_trgm_ops)",
+"create index %ZZ%line_name on %ZZ%line using gin(name gin_trgm_ops)",
+#"create index %ZZ%highway_name on %ZZ%highway using gin(name gin_trgm_ops)",
+
 "vacuum analyze %ZZ%point",
 "vacuum analyze %ZZ%line",
 "vacuum analyze %ZZ%highway",
@@ -250,6 +257,11 @@ extended_indices_pointline = [
 "create view %ZZ%json_point as select osm_id,quadtree,tile,jsonb_strip_nulls(row_to_json(pp)::jsonb - 'osm_id' - 'quadtree' - 'tile' - 'tags' - 'minzoom' - 'way') || tags::jsonb as properties, minzoom, way from %ZZ%point pp",
 "create view %ZZ%json_line as select osm_id,quadtree,tile,jsonb_strip_nulls(row_to_json(pp)::jsonb - 'osm_id' - 'quadtree' - 'tile' - 'tags' - 'z_order' - 'minzoom' - 'way') || tags::jsonb as properties, z_order, minzoom, way from %ZZ%line pp",
 "create view %ZZ%json_highway as select osm_id,quadtree,tile,jsonb_strip_nulls(row_to_json(pp)::jsonb - 'osm_id' - 'quadtree' - 'tile' - 'tags' - 'z_order' - 'minzoom' - 'way') || tags::jsonb as properties, z_order, minzoom, way from %ZZ%highway pp",
+
+"alter table %ZZ%point set (autovacuum_enabled=true)",
+"alter table %ZZ%line set (autovacuum_enabled=true)",
+"alter table %ZZ%highway set (autovacuum_enabled=true)",
+
 ]
 
 extended_indices_polygon = [
@@ -257,12 +269,14 @@ extended_indices_polygon = [
 "create index %ZZ%building_way on %ZZ%building using gist(way)",
 "create index %ZZ%boundary_way on %ZZ%boundary using gist(way)",
 "create index %ZZ%polygon_way_point on %ZZ%polygon using gist(way_point) where way_point is not null",
+
 "create index %ZZ%polygon_id on %ZZ%polygon using btree(osm_id)",
 "create index %ZZ%building_id on %ZZ%building using btree(osm_id)",
 "create index %ZZ%boundary_id on %ZZ%boundary using btree(osm_id)",
-"alter table %ZZ%polygon set (autovacuum_enabled=true)",
-"alter table %ZZ%building set (autovacuum_enabled=true)",
-"alter table %ZZ%boundary set (autovacuum_enabled=true)",
+
+"create index %ZZ%polygon_name on %ZZ%polygon using gin(name gin_trgm_ops)",
+"create index %ZZ%boundary_name on %ZZ%boundary using gin(name gin_trgm_ops)",
+
 "vacuum analyze %ZZ%polygon",
 "vacuum analyze %ZZ%building",
 "vacuum analyze %ZZ%boundary",
@@ -271,6 +285,10 @@ extended_indices_polygon = [
 "create view %ZZ%json_building as select osm_id,quadtree,tile,jsonb_strip_nulls(row_to_json(pp)::jsonb - 'osm_id' - 'quadtree' - 'tile' - 'tags' - 'z_order' - 'minzoom' - 'way_area' - 'way') || tags::jsonb as properties, z_order, minzoom, way_area, way from %ZZ%building pp",
 "create view %ZZ%json_boundary as select osm_id,quadtree,tile,jsonb_strip_nulls(row_to_json(pp)::jsonb - 'osm_id' - 'quadtree' - 'tile' - 'minzoom' - 'way_area' - 'way') as properties, minzoom, way_area, way from %ZZ%boundary pp",
 "create view %ZZ%polygon_exterior as select * from %ZZ%polygon",
+
+"alter table %ZZ%polygon set (autovacuum_enabled=true)",
+"alter table %ZZ%building set (autovacuum_enabled=true)",
+"alter table %ZZ%boundary set (autovacuum_enabled=true)",
 ]
 
 def find_polygon_cols(curs, table_prfx,skip=set(['way','way_point'])):

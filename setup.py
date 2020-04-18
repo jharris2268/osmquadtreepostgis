@@ -3,6 +3,7 @@ from distutils.command.build_ext import build_ext
 from distutils.sysconfig import customize_compiler
 
 import shutil, os.path
+import pybind11
 
 #xmlinspector_path = os.path.abspath("../thirdparty/xmlinspector")
 
@@ -46,6 +47,7 @@ ext_modules.append(
             srcs,
             include_dirs=[
                 '/usr/local/include',
+                pybind11.get_include(),
                 os.path.abspath('src/'),
                 postgresql_path,
             ],

@@ -401,9 +401,9 @@ void osmquadtreepostgis_defs(py::module& m) {
     
 };
 
-PYBIND11_PLUGIN(_osmquadtreepostgis) {
-    py::module m("_osmquadtreepostgis", "pybind11 example plugin");
+PYBIND11_MODULE(_osmquadtreepostgis, m) {
+    m.doc() = "pybind11 example plugin";
     osmquadtreepostgis_defs(m);
-    return m.ptr();
+    
 }
 
