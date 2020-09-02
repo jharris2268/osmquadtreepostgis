@@ -204,7 +204,7 @@ planetosm = [
 "drop view if exists planet_osm_polygon_point",
 "create view planet_osm_point as (select * from %ZZ%point)",
 "create view planet_osm_line as (select * from %ZZ%line union all select * from %ZZ%highway)",
-#"create view planet_osm_polygon as (select * from %ZZ%polygon union all select * from %ZZ%building)",
+"create view planet_osm_polygon as (select * from %ZZ%polygon union all select * from %ZZ%building)",
 """create table planet_osm_roads as (
     SELECT osm_id,tile,quadtree,name,ref,admin_level,highway,railway,boundary,
             service,tunnel,bridge,z_order,covered,surface, minzoom, way
@@ -440,6 +440,11 @@ def write_to_postgis(prfx, box_in,connstr, tabprfx, stylefn=None, writeindices=T
         with get_db_conn(postgisparams.connstring) as conn:
             write_extended_indices_pointline(conn.cursor(), postgisparams.tableprfx)
             write_extended_indices_polygon(conn.cursor(), postgisparams.tableprfx)
+            
+            write_planetosm_views(conn.cursor(), postgisparams.tableprfx)
+            create_tables_lowzoom(conn.cursor(), postgisparams.tableprfx, postgisparams.tableprfx+'lz6_', 6, simp=612)
+            create_views_lowzoom(conn.cursor(), postgisparams.tableprfx, postgisparams.tableprfx+'lz9_', 9)
+            create_views_lowzoom(conn.cursor(), postgisparams.tableprfx, postgisparams.tableprfx+'lz11_', 11)
         
     return errs
 
