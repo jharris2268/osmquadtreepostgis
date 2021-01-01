@@ -107,7 +107,8 @@ enum class ColumnSource {
     Length,
     Area,
     Geometry,
-    RepresentativePointGeometry
+    RepresentativePointGeometry,
+    BoundaryLineGeometry
 };
 
 

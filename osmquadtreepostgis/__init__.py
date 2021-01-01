@@ -117,10 +117,13 @@ def postgis_columns(style, add_min_zoom, extended=False, extra_node_cols=None, e
     highway.set_columns(line_cols)
     
     building=opg.GeometryTableSpec('building')
-    building.set_columns(poly_cols[:-1])
+    building.set_columns(poly_cols)
     
     boundary=opg.GeometryTableSpec('boundary')
-    boundary.set_columns([p for p in poly_cols if p.name in ('osm_id','part','quadtree','tile','boundary','admin_level','name','ref', 'minzoom','way_area','way')])
+    boundary_cols = [p for p in poly_cols if p.name in ('osm_id','part','quadtree','tile','boundary','admin_level','name','ref', 'minzoom','way_area','way')]
+    boundary_cols.append(opg.GeometryColumnSpec('way_exterior', opg.GeometryColumnType.Geometry, opg.GeometryColumnSource.BoundaryLineGeometry))
+     
+    boundary.set_columns(boundary_cols)
     return [point,line,polygon,highway,building,boundary]
     
 
@@ -149,7 +152,7 @@ def type_str(ct):
 def prep_table_create(prfx, ts):
     
     cols = [(c.name, type_str(c.type)) for c in ts.columns]
-    return 'create table %s%s (%s) with oids' % (prfx, ts.table_name, ", ".join('"%s" %s' % (a,b) for a,b in cols))
+    return 'create table %s%s (%s)' % (prfx, ts.table_name, ", ".join('"%s" %s' % (a,b) for a,b in cols))
     
     
 
@@ -204,7 +207,7 @@ planetosm = [
 "drop view if exists planet_osm_polygon_point",
 "create view planet_osm_point as (select * from %ZZ%point)",
 "create view planet_osm_line as (select * from %ZZ%line union all select * from %ZZ%highway)",
-"create view planet_osm_polygon as (select * from %ZZ%polygon union all select * from %ZZ%building)",
+#"create view planet_osm_polygon as (select * from %ZZ%polygon union all select * from %ZZ%building)",
 """create table planet_osm_roads as (
     SELECT osm_id,tile,quadtree,name,ref,admin_level,highway,railway,boundary,
             service,tunnel,bridge,z_order,covered,surface, minzoom, way
@@ -219,7 +222,7 @@ planetosm = [
     SELECT osm_id,tile,quadtree,name,null as ref, admin_level,null as highway,
             null as railway, boundary, null as service,
             null as tunnel,null as bridge, 0  as z_order,null as covered,null as surface,minzoom, 
-            st_exteriorring(way) as way
+            way_exterior as way
         FROM %ZZ%boundary WHERE
             osm_id<0 and boundary='administrative')""",
 
@@ -269,6 +272,7 @@ extended_indices_polygon = [
 "create index %ZZ%building_way on %ZZ%building using gist(way)",
 "create index %ZZ%boundary_way on %ZZ%boundary using gist(way)",
 "create index %ZZ%polygon_way_point on %ZZ%polygon using gist(way_point) where way_point is not null",
+"create index %ZZ%boundary_way_exterior on %ZZ%boundary using gist(way_exterior) where way_exterior is not null",
 
 "create index %ZZ%polygon_id on %ZZ%polygon using btree(osm_id)",
 "create index %ZZ%building_id on %ZZ%building using btree(osm_id)",
@@ -364,6 +368,7 @@ def create_tables_lowzoom(curs, prfx, newprefix, minzoom, simp=None, cols=None,t
         cols=find_polygon_cols(curs, prfx)
         queries.append("create view %ZZ%polygon_point as select "+cols+", way_point as way from %ZZ%polygon where way_point is not null")
         queries.append("create index %ZZ%polygon_waypoint on %ZZ%polygon using gist(way_point) where way_point is not null")
+        queries.append("create index %ZZ%boundary_way_exterior on %ZZ%boundary using gist(way_exterior) where way_exterior is not null")
     
         queries.append("create view %ZZ%polygon_exterior as select * from %ZZ%polygon")
 
@@ -392,6 +397,7 @@ def create_views_lowzoom(curs, prfx, newprefix, minzoom, indices=True, table_nam
     if indices and 'polygon_point' in table_names:
         queries.append("drop index if exists %ZZ%polygon_waypoint")
         queries.append("create index %ZZ%polygon_waypoint on "+prfx+"polygon using gist(way_point) where way_point is not null and minzoom <= "+str(minzoom))
+        queries.append("create index %ZZ%boundary_way_exterior on "+prfx+"boundary using gist(way_exterior) where way_exterior is not null and minzoom <= "+str(minzoom))
     
     write_indices(curs,newprefix,queries)
 

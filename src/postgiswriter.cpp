@@ -647,13 +647,19 @@ std::string pack_pgbinary_row(const std::vector<std::pair<bool,std::string>>& fi
     if (tl!=pos) { throw std::domain_error("??"); }
     return data;
 }
-    
+
+struct prep_geometry_result {
+    std::string geom;
+    std::string rep_point_geom;
+    std::string boundary_line_geom;
+};
+
 
 
 class PackCsvBlocksTableBinary : public PackCsvBlocksTableBase {
     public:
         PackCsvBlocksTableBinary(const TableSpec& table_spec_, bool validate_geometry_)
-         : table_spec(table_spec_), validate_geometry(validate_geometry_), othertags_col(-1), has_geometry(false), has_rep_point(false) {
+         : table_spec(table_spec_), validate_geometry(validate_geometry_), othertags_col(-1), has_geometry(false), has_rep_point(false), has_boundary_line(false) {
             
             
             for (size_t i=0; i<table_spec.columns.size(); i++) {
@@ -670,6 +676,9 @@ class PackCsvBlocksTableBinary : public PackCsvBlocksTableBase {
                 }
                 if (col.source == ColumnSource::RepresentativePointGeometry) {
                     has_rep_point=true;
+                }
+                if (col.source == ColumnSource::BoundaryLineGeometry) {
+                    has_boundary_line = true;
                 }
             }
             
@@ -719,20 +728,25 @@ class PackCsvBlocksTableBinary : public PackCsvBlocksTableBase {
         std::map<std::string,size_t> tag_cols;
         bool has_geometry;
         bool has_rep_point;
+        bool has_boundary_line;
         
         
-        std::pair<std::string,std::string> prep_geometry(std::shared_ptr<BaseGeometry> geom) {
-            if ((!has_geometry) && (!has_rep_point)) {
-                return std::make_pair("","");
-            }
-            if (geom->Type() == oqt::ElementType::Point) {
-                auto w = geom->Wkb(true,true);
-                return std::make_pair(w,w);
+        prep_geometry_result prep_geometry(std::shared_ptr<BaseGeometry> geom) {
+            prep_geometry_result res;
+            
+            if ((!has_geometry) && (!has_rep_point) && (!has_boundary_line)) {
+                return res;
             }
             
-            if (has_geometry && (!has_rep_point) && (!validate_geometry)) {
-                auto w = geom->Wkb(true,true);
-                return std::make_pair(w, "");
+            if (geom->Type() == oqt::ElementType::Point) {
+                res.geom = geom->Wkb(true,true);
+                res.rep_point_geom = res.geom;
+                return res;
+            }
+            
+            if (has_geometry && (!has_rep_point) && (!validate_geometry) && (!has_boundary_line)) {
+                res.geom = geom->Wkb(true,true);
+                return res;
             }
             
             auto gg = make_geos_geometry(geom);
@@ -740,24 +754,33 @@ class PackCsvBlocksTableBinary : public PackCsvBlocksTableBase {
             if (validate_geometry) {
                 gg->validate();
             }
-            std::string wkb, ptwkb;
+            
             if (has_geometry) {
-                wkb = gg->Wkb();
+                res.geom = gg->Wkb();
             }
             if (has_rep_point) {
-                ptwkb = gg->PointWkb();
+                res.rep_point_geom = gg->PointWkb();
             }
-            return std::make_pair(wkb,ptwkb);
+            if (has_boundary_line) {
+                if (geom->Type() == oqt::ElementType::Linestring) {
+                    res.boundary_line_geom = gg->Wkb();
+                } else {
+                    res.boundary_line_geom = gg->BoundaryLineWkb();
+                }
+            }
+            return res;
         }
-        std::pair<std::string,std::string> prep_geometry_cp_part(std::shared_ptr<ComplicatedPolygon> geom, size_t part) {
-            if ((!has_geometry) && (!has_rep_point)) {
-                return std::make_pair("","");
+        prep_geometry_result prep_geometry_cp_part(std::shared_ptr<ComplicatedPolygon> geom, size_t part) {
+            prep_geometry_result res;
+            
+            if ((!has_geometry) && (!has_rep_point) && (!has_boundary_line)) {
+                return res;
             }
             
             
-            if (has_geometry && (!has_rep_point) && (!validate_geometry)) {
-                auto w = geom->Wkb(true,true);
-                return std::make_pair(w, "");
+            if (has_geometry && (!has_rep_point) && (!validate_geometry) && (!has_boundary_line)) {
+                res.geom = geom->Wkb(true,true);
+                return res;
             }
             
             auto gg = make_geos_geometry_cp_part(geom,part);
@@ -765,14 +788,17 @@ class PackCsvBlocksTableBinary : public PackCsvBlocksTableBase {
             if (validate_geometry) {
                 gg->validate();
             }
-            std::string wkb, ptwkb;
+            
             if (has_geometry) {
-                wkb = gg->Wkb();
+                res.geom = gg->Wkb();
             }
             if (has_rep_point) {
-                ptwkb = gg->PointWkb();
+                res.rep_point_geom = gg->PointWkb();
             }
-            return std::make_pair(wkb,ptwkb);
+            if (has_boundary_line) {
+                res.boundary_line_geom = gg->BoundaryLineWkb();
+            }
+            return res;
         }
         
         
@@ -810,12 +836,16 @@ class PackCsvBlocksTableBinary : public PackCsvBlocksTableBase {
                         current[i] = std::make_pair(true, pack_pg_int(col.type, ele->MinZoom()));
                     }
                 } else if (col.source == ColumnSource::Geometry) {
-                    if (!gg.first.empty()) {
-                        current[i] = std::make_pair(true, gg.first);
+                    if (!gg.geom.empty()) {
+                        current[i] = std::make_pair(true, gg.geom);
                     }
                 } else if (col.source == ColumnSource::RepresentativePointGeometry) {
-                    if (!gg.second.empty()) {
-                        current[i] = std::make_pair(true, gg.second);
+                    if (!gg.rep_point_geom.empty()) {
+                        current[i] = std::make_pair(true, gg.rep_point_geom);
+                    }
+                } else if (col.source == ColumnSource::BoundaryLineGeometry) {
+                    if (!gg.boundary_line_geom.empty()) {
+                        current[i] = std::make_pair(true, gg.boundary_line_geom);
                     }
                 }
                 
@@ -857,12 +887,16 @@ class PackCsvBlocksTableBinary : public PackCsvBlocksTableBase {
                     current[i]=std::make_pair(true, pack_pg_double(col.type, round(ele->Length()*10.0)/10.0));
                     
                 } else if (col.source == ColumnSource::Geometry) {
-                    if (!gg.first.empty()) {
-                        current[i] = std::make_pair(true, gg.first);
+                    if (!gg.geom.empty()) {
+                        current[i] = std::make_pair(true, gg.geom);
                     }
                 } else if (col.source == ColumnSource::RepresentativePointGeometry) {
-                    if (!gg.second.empty()) {
-                        current[i] = std::make_pair(true, gg.second);
+                    if (!gg.rep_point_geom.empty()) {
+                        current[i] = std::make_pair(true, gg.rep_point_geom);
+                    }
+                } else if (col.source == ColumnSource::BoundaryLineGeometry) {
+                    if (!gg.boundary_line_geom.empty()) {
+                        current[i] = std::make_pair(true, gg.boundary_line_geom);
                     }
                 }
                 
@@ -903,12 +937,16 @@ class PackCsvBlocksTableBinary : public PackCsvBlocksTableBase {
                     current[i]=std::make_pair(true, pack_pg_double(col.type, round(ele->Area()*10.0)/10.0));
                     
                 } else if (col.source == ColumnSource::Geometry) {
-                    if (!gg.first.empty()) {
-                        current[i] = std::make_pair(true, gg.first);
+                    if (!gg.geom.empty()) {
+                        current[i] = std::make_pair(true, gg.geom);
                     }
                 } else if (col.source == ColumnSource::RepresentativePointGeometry) {
-                    if (!gg.second.empty()) {
-                        current[i] = std::make_pair(true, gg.second);
+                    if (!gg.rep_point_geom.empty()) {
+                        current[i] = std::make_pair(true, gg.rep_point_geom);
+                    }
+                } else if (col.source == ColumnSource::BoundaryLineGeometry) {
+                    if (!gg.boundary_line_geom.empty()) {
+                        current[i] = std::make_pair(true, gg.boundary_line_geom);
                     }
                 }
                 
@@ -950,14 +988,18 @@ class PackCsvBlocksTableBinary : public PackCsvBlocksTableBase {
                     current[i]=std::make_pair(true, pack_pg_double(col.type, round(ele->Area()*10.0)/10.0));
                     
                 } else if (col.source == ColumnSource::Geometry) {
-                    if (!gg.first.empty()) {
-                        current[i] = std::make_pair(true, gg.first);
+                    if (!gg.geom.empty()) {
+                        current[i] = std::make_pair(true, gg.geom);
                     }
                 } else if (col.source == ColumnSource::RepresentativePointGeometry) {
-                    if (!gg.second.empty()) {
-                        current[i] = std::make_pair(true, gg.second);
+                    if (!gg.rep_point_geom.empty()) {
+                        current[i] = std::make_pair(true, gg.rep_point_geom);
                     }
                     
+                } else if (col.source == ColumnSource::BoundaryLineGeometry) {
+                    if (!gg.boundary_line_geom.empty()) {
+                        current[i] = std::make_pair(true, gg.boundary_line_geom);
+                    }
                 }
                 
             }
@@ -999,12 +1041,16 @@ class PackCsvBlocksTableBinary : public PackCsvBlocksTableBase {
                     current[i]=std::make_pair(true, pack_pg_double(col.type, round(a*10.0)/10.0));
                     
                 } else if (col.source == ColumnSource::Geometry) {
-                    if (!gg.first.empty()) {
-                        current[i] = std::make_pair(true, gg.first);
+                    if (!gg.geom.empty()) {
+                        current[i] = std::make_pair(true, gg.geom);
                     }
                 } else if (col.source == ColumnSource::RepresentativePointGeometry) {
-                    if (!gg.second.empty()) {
-                        current[i] = std::make_pair(true, gg.second);
+                    if (!gg.rep_point_geom.empty()) {
+                        current[i] = std::make_pair(true, gg.rep_point_geom);
+                    }
+                } else if (col.source == ColumnSource::BoundaryLineGeometry) {
+                    if (!gg.boundary_line_geom.empty()) {
+                        current[i] = std::make_pair(true, gg.boundary_line_geom);
                     }
                 }
                 

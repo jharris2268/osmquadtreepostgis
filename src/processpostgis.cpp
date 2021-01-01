@@ -135,7 +135,7 @@ mperrorvec process_geometry_postgis(const GeometryParameters& params, const Post
     
     auto addwns = process_geometry_blocks(
             writer, params,
-            [&errors_res](mperrorvec& ee) { errors_res.swap(ee); }
+            [&errors_res](mperrorvec& ee) { errors_res.errors.swap(ee.errors); }
     );
     
     read_blocks_merge(params.filenames, addwns, params.locs, params.numchan, nullptr, ReadBlockFlags::Empty, 1<<14);
@@ -168,7 +168,7 @@ mperrorvec process_geometry_postgis_nothread(const GeometryParameters& params, c
     
     block_callback addwns = process_geometry_blocks_nothread(
             writer, params,
-            [&errors_res](mperrorvec& ee) { errors_res.swap(ee); }
+            [&errors_res](mperrorvec& ee) { errors_res.errors.swap(ee.errors); }
     );
     
     read_blocks_merge_nothread(params.filenames, addwns, params.locs, nullptr, ReadBlockFlags::Empty);
@@ -202,7 +202,7 @@ mperrorvec process_geometry_csvcallback(const GeometryParameters& params,
     
     auto addwns = process_geometry_blocks(
             csvcallback, params,
-            [&errors_res](mperrorvec& ee) { errors_res.swap(ee); }
+            [&errors_res](mperrorvec& ee) { errors_res.errors.swap(ee.errors); }
     );
     
     read_blocks_merge(params.filenames, addwns, params.locs, params.numchan, nullptr, ReadBlockFlags::Empty, 1<<14);
@@ -223,7 +223,7 @@ mperrorvec process_geometry_csvcallback_nothread(const GeometryParameters& param
     
     block_callback addwns = process_geometry_blocks_nothread(
             csvcallback, params,
-            [&errors_res](mperrorvec& ee) { errors_res.swap(ee); }
+            [&errors_res](mperrorvec& ee) { errors_res.errors.swap(ee.errors); }
     );
     
     read_blocks_merge_nothread(params.filenames, addwns, params.locs, nullptr, ReadBlockFlags::Empty);

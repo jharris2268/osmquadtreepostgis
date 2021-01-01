@@ -100,6 +100,13 @@ class GeosGeometryImpl : public GeosGeometry {
             GEOSGeom_destroy_r(handle, point);
             return wkb;
         }
+        
+        std::string BoundaryLineWkb() {
+            GEOSGeometry* line = GEOSBoundary_r(handle, geometry);
+            auto wkb= write_wkb(line);
+            GEOSGeom_destroy_r(handle, line);
+            return wkb;
+        }
     
     private:
         GEOSContextHandle_t handle;

@@ -374,6 +374,7 @@ void osmquadtreepostgis_defs(py::module& m) {
         .value("Area", geometry::ColumnSource::Area)
         .value("Geometry", geometry::ColumnSource::Geometry)
         .value("RepresentativePointGeometry", geometry::ColumnSource::RepresentativePointGeometry)
+        .value("BoundaryLineGeometry", geometry::ColumnSource::BoundaryLineGeometry)
     ;
     
     py::class_<geometry::ColumnSpec>(m, "GeometryColumnSpec")

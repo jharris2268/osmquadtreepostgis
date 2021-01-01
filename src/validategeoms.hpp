@@ -39,6 +39,7 @@ class GeosGeometry {
         
         virtual std::string PointWkb()=0;
         virtual std::string Wkb()=0;
+        virtual std::string BoundaryLineWkb()=0;
 };
 
 std::shared_ptr<GeosGeometry> make_geos_geometry(std::shared_ptr<BaseGeometry> ele);
