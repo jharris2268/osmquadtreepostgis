@@ -33,7 +33,7 @@ namespace geometry {
 struct PostgisParameters {
     
     PostgisParameters()
-        : connstring(""), tableprfx(""), use_binary(false), split_multipolygons(false), validate_geometry(false) {}
+        : connstring(""), tableprfx(""), use_binary(false), alloc_func(default_table_alloc), split_multipolygons(false), validate_geometry(false) {}
         
     
     std::string connstring;

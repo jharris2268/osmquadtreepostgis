@@ -101,7 +101,8 @@ def postgis_columns(style, add_min_zoom, extended=False, extra_node_cols=None, e
     poly_cols.append(opg.GeometryColumnSpec('way_area', opg.GeometryColumnType.Double, opg.GeometryColumnSource.Area))
     poly_cols.append(opg.GeometryColumnSpec('way', opg.GeometryColumnType.Geometry, opg.GeometryColumnSource.Geometry))
     
-    poly_cols.append(opg.GeometryColumnSpec('way_point', opg.GeometryColumnType.PointGeometry, opg.GeometryColumnSource.RepresentativePointGeometry))
+    if extended:
+        poly_cols.append(opg.GeometryColumnSpec('way_point', opg.GeometryColumnType.PointGeometry, opg.GeometryColumnSource.RepresentativePointGeometry))
         
     point = opg.GeometryTableSpec("point")
     point.set_columns(point_cols)
@@ -112,20 +113,21 @@ def postgis_columns(style, add_min_zoom, extended=False, extra_node_cols=None, e
     polygon = opg.GeometryTableSpec("polygon")
     polygon.set_columns(poly_cols)
     
-    
-    highway=opg.GeometryTableSpec('highway')
-    highway.set_columns(line_cols)
-    
-    building=opg.GeometryTableSpec('building')
-    building.set_columns(poly_cols)
-    
-    boundary=opg.GeometryTableSpec('boundary')
-    boundary_cols = [p for p in poly_cols if p.name in ('osm_id','part','quadtree','tile','boundary','admin_level','name','ref', 'minzoom','way_area','way')]
-    boundary_cols.append(opg.GeometryColumnSpec('way_exterior', opg.GeometryColumnType.Geometry, opg.GeometryColumnSource.BoundaryLineGeometry))
-     
-    boundary.set_columns(boundary_cols)
-    return [point,line,polygon,highway,building,boundary]
-    
+    if extended:
+        highway=opg.GeometryTableSpec('highway')
+        highway.set_columns(line_cols)
+        
+        building=opg.GeometryTableSpec('building')
+        building.set_columns(poly_cols)
+        
+        boundary=opg.GeometryTableSpec('boundary')
+        boundary_cols = [p for p in poly_cols if p.name in ('osm_id','part','quadtree','tile','boundary','admin_level','name','ref', 'minzoom','way_area','way')]
+        boundary_cols.append(opg.GeometryColumnSpec('way_exterior', opg.GeometryColumnType.Geometry, opg.GeometryColumnSource.BoundaryLineGeometry))
+         
+        boundary.set_columns(boundary_cols)
+        return [point,line,polygon,highway,building,boundary]
+    else:
+        return [point,line,polygon]
 
     
     
@@ -236,63 +238,115 @@ planetosm = [
 
 ]
 
-extended_indices_pointline = [
+common_indices_pointline = [
 "create index %ZZ%point_way on %ZZ%point using gist(way)",
 "create index %ZZ%line_way on %ZZ%line using gist(way)",
+"""create index %ZZ%line_way_roadslz on %ZZ%line using gist(way) where (
+    highway in ('motorway','motorway_link','trunk','trunk_link','primary','primary_link','secondary')
+    or (railway in ('rail','light_rail','narrow_gauge','funicular') and (service IS NULL OR service NOT IN ('spur', 'siding', 'yard')))
+)""",
+"create index %ZZ%point_name on %ZZ%point using gin(name gin_trgm_ops)",
+"create index %ZZ%line_name on %ZZ%line using gin(name gin_trgm_ops)",
+"create index %ZZ%point_id on %ZZ%point using btree(osm_id)",
+"create index %ZZ%line_id on %ZZ%line using btree(osm_id)",
+"vacuum analyze %ZZ%point",
+"vacuum analyze %ZZ%line",
+"alter table %ZZ%point set (autovacuum_enabled=true)",
+"alter table %ZZ%line set (autovacuum_enabled=true)",
+]
+
+
+default_indices_pointline = common_indices_pointline + [
+"create view %ZZ%json_point as select osm_id,quadtree,tile,jsonb_strip_nulls(row_to_json(pp)::jsonb - 'osm_id' - 'quadtree' - 'tile' - 'tags' - 'way') || (tags::jsonb - 'layer') as properties, way from %ZZ%point pp",
+"create view %ZZ%json_line as select osm_id,quadtree,tile,jsonb_strip_nulls(row_to_json(pp)::jsonb - 'osm_id' - 'quadtree' - 'tile' - 'tags' - 'way') || (tags::jsonb - 'layer') as properties, way from %ZZ%line pp",
+
+
+
+]
+extended_indices_pointline = common_indices_pointline + [
+
 "create index %ZZ%highway_way on %ZZ%highway using gist(way)",
 """create index %ZZ%highway_way_lz on %ZZ%highway using gist(way) where (
     highway in ('motorway','motorway_link','trunk','trunk_link','primary','primary_link','secondary')
     or (railway in ('rail','light_rail','narrow_gauge','funicular') and (service IS NULL OR service NOT IN ('spur', 'siding', 'yard')))
 )""",
 
-"create index %ZZ%point_id on %ZZ%point using btree(osm_id)",
-"create index %ZZ%line_id on %ZZ%line using btree(osm_id)",
+
 "create index %ZZ%highway_id on %ZZ%highway using btree(osm_id)",
 
-"create index %ZZ%point_name on %ZZ%point using gin(name gin_trgm_ops)",
-"create index %ZZ%line_name on %ZZ%line using gin(name gin_trgm_ops)",
-#"create index %ZZ%highway_name on %ZZ%highway using gin(name gin_trgm_ops)",
+"create index %ZZ%highway_name on %ZZ%highway using gin(name gin_trgm_ops)",
 
-"vacuum analyze %ZZ%point",
-"vacuum analyze %ZZ%line",
+
 "vacuum analyze %ZZ%highway",
 
-"create view %ZZ%json_point as select osm_id,quadtree,tile,jsonb_strip_nulls(row_to_json(pp)::jsonb - 'osm_id' - 'quadtree' - 'tile' - 'tags' - 'minzoom' - 'way') || tags::jsonb as properties, minzoom, way from %ZZ%point pp",
-"create view %ZZ%json_line as select osm_id,quadtree,tile,jsonb_strip_nulls(row_to_json(pp)::jsonb - 'osm_id' - 'quadtree' - 'tile' - 'tags' - 'z_order' - 'minzoom' - 'way') || tags::jsonb as properties, z_order, minzoom, way from %ZZ%line pp",
-"create view %ZZ%json_highway as select osm_id,quadtree,tile,jsonb_strip_nulls(row_to_json(pp)::jsonb - 'osm_id' - 'quadtree' - 'tile' - 'tags' - 'z_order' - 'minzoom' - 'way') || tags::jsonb as properties, z_order, minzoom, way from %ZZ%highway pp",
+"create view %ZZ%json_highway as select osm_id,quadtree,tile,jsonb_strip_nulls(row_to_json(pp)::jsonb - 'osm_id' - 'quadtree' - 'tile' - 'tags' - 'minzoom' - 'way') || (tags::jsonb - 'layer') as properties, minzoom, way from %ZZ%highway pp",
+"create view %ZZ%json_point as select osm_id,quadtree,tile,jsonb_strip_nulls(row_to_json(pp)::jsonb - 'osm_id' - 'quadtree' - 'tile' - 'tags' - 'minzoom' - 'way') || (tags::jsonb - 'layer') as properties, minzoom, way from %ZZ%point pp",
+"create view %ZZ%json_line as select osm_id,quadtree,tile,jsonb_strip_nulls(row_to_json(pp)::jsonb - 'osm_id' - 'quadtree' - 'tile' - 'tags' - 'minzoom' - 'way') || (tags::jsonb - 'layer') as properties, minzoom, way from %ZZ%line pp",
 
-"alter table %ZZ%point set (autovacuum_enabled=true)",
-"alter table %ZZ%line set (autovacuum_enabled=true)",
+
 "alter table %ZZ%highway set (autovacuum_enabled=true)",
 
 ]
 
-extended_indices_polygon = [
+common_indices_polygon = [
 "create index %ZZ%polygon_way on %ZZ%polygon using gist(way)",
+"create index %ZZ%polygon_id on %ZZ%polygon using btree(osm_id)",
+"create index %ZZ%polygon_name on %ZZ%polygon using gin(name gin_trgm_ops)",
+
+"alter table %ZZ%polygon set (autovacuum_enabled=true)",
+]
+
+default_indices_polygon = common_indices_polygon + [
+
+"create view %ZZ%json_polygon as select osm_id,quadtree,tile,jsonb_strip_nulls(row_to_json(pp)::jsonb - 'osm_id' - 'quadtree' - 'tile' - 'tags' - 'way') || (tags::jsonb - 'layer') as properties, way from %ZZ%polygon pp",
+"""create table %ZZ%roads as (
+    SELECT osm_id,tile,quadtree,name,ref,admin_level,highway,railway,boundary,
+            service,tunnel,bridge,z_order,covered,surface, way
+        FROM %ZZ%line
+        WHERE highway in (
+            'secondary','secondary_link','primary','primary_link',
+            'trunk','trunk_link','motorway','motorway_link')
+        OR railway is not null
+
+    UNION ALL
+    
+    SELECT osm_id,tile,quadtree,name,null as ref, admin_level,null as highway,
+            null as railway, boundary, null as service,
+            null as tunnel,null as bridge, 0  as z_order,null as covered,null as surface, 
+            way
+        FROM %ZZ%polygon WHERE
+            osm_id<0 and boundary='administrative')""",
+"create view %ZZ%json_roads as select osm_id,quadtree,tile,jsonb_strip_nulls(row_to_json(pp)::jsonb - 'osm_id' - 'quadtree' - 'tile' - 'tags' - 'way') as properties, way from %ZZ%roads pp",
+"vacuum analyze %ZZ%polygon",
+"vacuum analyze %ZZ%roads",
+]
+
+
+extended_indices_polygon = common_indices_polygon + [
+
 "create index %ZZ%building_way on %ZZ%building using gist(way)",
 "create index %ZZ%boundary_way on %ZZ%boundary using gist(way)",
 "create index %ZZ%polygon_way_point on %ZZ%polygon using gist(way_point) where way_point is not null",
 "create index %ZZ%boundary_way_exterior on %ZZ%boundary using gist(way_exterior) where way_exterior is not null",
 
-"create index %ZZ%polygon_id on %ZZ%polygon using btree(osm_id)",
+
 "create index %ZZ%building_id on %ZZ%building using btree(osm_id)",
 "create index %ZZ%boundary_id on %ZZ%boundary using btree(osm_id)",
 
-"create index %ZZ%polygon_name on %ZZ%polygon using gin(name gin_trgm_ops)",
 "create index %ZZ%boundary_name on %ZZ%boundary using gin(name gin_trgm_ops)",
 
 "vacuum analyze %ZZ%polygon",
 "vacuum analyze %ZZ%building",
 "vacuum analyze %ZZ%boundary",
 
-"create view %ZZ%json_polygon as select osm_id,quadtree,tile,jsonb_strip_nulls(row_to_json(pp)::jsonb - 'osm_id' - 'quadtree' - 'tile' - 'tags' - 'z_order' - 'minzoom' - 'way_area' - 'way' - 'way_point') || tags::jsonb as properties, z_order, minzoom, way_area, way, way_point from %ZZ%polygon pp",
-"create view %ZZ%json_building as select osm_id,quadtree,tile,jsonb_strip_nulls(row_to_json(pp)::jsonb - 'osm_id' - 'quadtree' - 'tile' - 'tags' - 'z_order' - 'minzoom' - 'way_area' - 'way') || tags::jsonb as properties, z_order, minzoom, way_area, way from %ZZ%building pp",
-"create view %ZZ%json_boundary as select osm_id,quadtree,tile,jsonb_strip_nulls(row_to_json(pp)::jsonb - 'osm_id' - 'quadtree' - 'tile' - 'minzoom' - 'way_area' - 'way') as properties, minzoom, way_area, way from %ZZ%boundary pp",
+"create view %ZZ%json_building as select osm_id,quadtree,tile,jsonb_strip_nulls(row_to_json(pp)::jsonb - 'osm_id' - 'quadtree' - 'tile' - 'tags' - 'minzoom' - 'way') || (tags::jsonb - 'layer') as properties, minzoom, way from %ZZ%building pp",
+"create view %ZZ%json_boundary as select osm_id,quadtree,tile,jsonb_strip_nulls(row_to_json(pp)::jsonb - 'osm_id' - 'quadtree' - 'tile' - 'minzoom' - 'way') as properties, minzoom, way from %ZZ%boundary pp",
 "create view %ZZ%polygon_exterior as select * from %ZZ%polygon",
 
-"alter table %ZZ%polygon set (autovacuum_enabled=true)",
+
 "alter table %ZZ%building set (autovacuum_enabled=true)",
 "alter table %ZZ%boundary set (autovacuum_enabled=true)",
+"create view %ZZ%json_polygon as select osm_id,quadtree,tile,jsonb_strip_nulls(row_to_json(pp)::jsonb - 'osm_id' - 'quadtree' - 'tile' - 'tags'  - 'minzoom'- 'way' - 'way_point') || (tags::jsonb - 'layer') as properties, minzoom, way, way_point from %ZZ%polygon pp",
 ]
 
 def find_polygon_cols(curs, table_prfx,skip=set(['way','way_point'])):
@@ -407,7 +461,7 @@ def get_db_conn(connstring):
     conn.autocommit=True
     return conn
 
-def write_to_postgis(prfx, box_in,connstr, tabprfx, stylefn=None, writeindices=True, lastdate=None,minzoom=None,nothread=False, numchan=4, minlen=0,minarea=5,use_binary=True):
+def write_to_postgis(prfx, box_in,connstr, tabprfx, stylefn=None, writeindices=True, lastdate=None,minzoom=None,nothread=False, numchan=4, minlen=0,minarea=5,use_binary=True,extended=True):
     if not connstr or not tabprfx:
         raise Exception("must specify connstr and tabprfx")
         
@@ -419,9 +473,10 @@ def write_to_postgis(prfx, box_in,connstr, tabprfx, stylefn=None, writeindices=T
     postgisparams = opg.PostgisParameters()
     
     #params.coltags = sorted((k,v.IsNode,v.IsWay,v.IsWay) for k,v in params.style.items() if k not in ('z_order','way_area'))
-    postgisparams.coltags = postgis_columns(style, params.findmz is not None, extended=True)
+    postgisparams.coltags = postgis_columns(style, params.findmz is not None, extended=extended)
     
-    postgisparams.alloc_func='extended'
+    if extended:
+        postgisparams.alloc_func='extended'
     postgisparams.validate_geometry = True
     
     if tabprfx and not tabprfx.endswith('_'):
@@ -435,6 +490,7 @@ def write_to_postgis(prfx, box_in,connstr, tabprfx, stylefn=None, writeindices=T
         with get_db_conn(postgisparams.connstring) as conn:
             create_tables(conn.cursor(), postgisparams.tableprfx, postgisparams.coltags)
     
+    
         
     cnt,errs=None,None
     if nothread:
@@ -444,14 +500,17 @@ def write_to_postgis(prfx, box_in,connstr, tabprfx, stylefn=None, writeindices=T
         
     if writeindices and postgisparams.connstring!='null':
         with get_db_conn(postgisparams.connstring) as conn:
-            write_extended_indices_pointline(conn.cursor(), postgisparams.tableprfx)
-            write_extended_indices_polygon(conn.cursor(), postgisparams.tableprfx)
-            
-            write_planetosm_views(conn.cursor(), postgisparams.tableprfx)
-            create_tables_lowzoom(conn.cursor(), postgisparams.tableprfx, postgisparams.tableprfx+'lz6_', 6, simp=612)
-            create_views_lowzoom(conn.cursor(), postgisparams.tableprfx, postgisparams.tableprfx+'lz9_', 9)
-            create_views_lowzoom(conn.cursor(), postgisparams.tableprfx, postgisparams.tableprfx+'lz11_', 11)
-        
+            if extended:
+                write_extended_indices_pointline(conn.cursor(), postgisparams.tableprfx)
+                write_extended_indices_polygon(conn.cursor(), postgisparams.tableprfx)
+                
+                write_planetosm_views(conn.cursor(), postgisparams.tableprfx)
+                create_tables_lowzoom(conn.cursor(), postgisparams.tableprfx, postgisparams.tableprfx+'lz6_', 6, simp=612)
+                create_views_lowzoom(conn.cursor(), postgisparams.tableprfx, postgisparams.tableprfx+'lz9_', 9)
+                create_views_lowzoom(conn.cursor(), postgisparams.tableprfx, postgisparams.tableprfx+'lz11_', 11)
+            else:
+                write_indices(conn.cursor(), postgisparams.tableprfx, default_indices_pointline)
+                write_indices(conn.cursor(), postgisparams.tableprfx, default_indices_polygon)
     return errs
 
 class CsvWriter:

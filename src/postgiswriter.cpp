@@ -417,8 +417,8 @@ class PackCsvBlocksTable : public PackCsvBlocksTableBase {
                 } else if (col.source == ColumnSource::BlockQuadtree) {
                     current[i] = std::to_string(block_qt);
                 } else if (col.source == ColumnSource::MinZoom) {
-                    if (ele->MinZoom()>0) {
-                        current[i] = std::to_string(ele->MinZoom());
+                    if (ele->MinZoom()) {
+                        current[i] = std::to_string(*ele->MinZoom());
                     }
                 } else if (col.source == ColumnSource::Geometry) {
                     current[i] = as_hex(ele->Wkb(true, true));
@@ -446,16 +446,16 @@ class PackCsvBlocksTable : public PackCsvBlocksTableBase {
                 } else if (col.source == ColumnSource::BlockQuadtree) {
                     current[i] = std::to_string(block_qt);
                 } else if (col.source == ColumnSource::MinZoom) {
-                    if (ele->MinZoom()>=0) {
-                        current[i] = std::to_string(ele->MinZoom());
+                    if (ele->MinZoom()) {
+                        current[i] = std::to_string(*ele->MinZoom());
                     }
                 } else if (col.source == ColumnSource::ZOrder) {
-                    if (ele->ZOrder()>0 ) {
-                        current[i]=std::to_string(ele->ZOrder());
+                    if (ele->ZOrder() ) {
+                        current[i]=std::to_string(*ele->ZOrder());
                     }
                 } else if (col.source == ColumnSource::Layer) {
-                    if (ele->ZOrder()>0 ) {
-                        current[i]=std::to_string(ele->ZOrder());
+                    if (ele->Layer() ) {
+                        current[i]=std::to_string(*ele->Layer());
                     }
                 } else if (col.source == ColumnSource::Length) {
                     current[i]=double_string(ele->Length());
@@ -486,16 +486,16 @@ class PackCsvBlocksTable : public PackCsvBlocksTableBase {
                 } else if (col.source == ColumnSource::BlockQuadtree) {
                     current[i] = std::to_string(block_qt);
                 } else if (col.source == ColumnSource::MinZoom) {
-                    if (ele->MinZoom()>=0) {
-                        current[i] = std::to_string(ele->MinZoom());
+                    if (ele->MinZoom()) {
+                        current[i] = std::to_string(*ele->MinZoom());
                     }
                 } else if (col.source == ColumnSource::ZOrder) {
-                    if (ele->ZOrder()>0 ) {
-                        current[i]=std::to_string(ele->ZOrder());
+                    if (ele->ZOrder()) {
+                        current[i]=std::to_string(*ele->ZOrder());
                     }
                 } else if (col.source == ColumnSource::Layer) {
-                    if (ele->ZOrder()>0 ) {
-                        current[i]=std::to_string(ele->ZOrder());
+                    if (ele->Layer()) {
+                        current[i]=std::to_string(*ele->Layer());
                     }
                 } else if (col.source == ColumnSource::Area) {
                     current[i]=double_string(ele->Area());
@@ -528,16 +528,16 @@ class PackCsvBlocksTable : public PackCsvBlocksTableBase {
                 } else if (col.source == ColumnSource::BlockQuadtree) {
                     current[i] = std::to_string(block_qt);
                 } else if (col.source == ColumnSource::MinZoom) {
-                    if (ele->MinZoom()>=0) {
-                        current[i] = std::to_string(ele->MinZoom());
+                    if (ele->MinZoom()) {
+                        current[i] = std::to_string(*ele->MinZoom());
                     }
                 } else if (col.source == ColumnSource::ZOrder) {
-                    if (ele->ZOrder()>0 ) {
-                        current[i]=std::to_string(ele->ZOrder());
+                    if (ele->ZOrder()) {
+                        current[i]=std::to_string(*ele->ZOrder());
                     }
                 } else if (col.source == ColumnSource::Layer) {
-                    if (ele->ZOrder()>0 ) {
-                        current[i]=std::to_string(ele->ZOrder());
+                    if (ele->Layer()) {
+                        current[i]=std::to_string(*ele->Layer());
                     }
                 } else if (col.source == ColumnSource::Area) {
                     current[i]=double_string(ele->Area());
@@ -569,16 +569,16 @@ class PackCsvBlocksTable : public PackCsvBlocksTableBase {
                 } else if (col.source == ColumnSource::BlockQuadtree) {
                     current[i] = std::to_string(block_qt);
                 } else if (col.source == ColumnSource::MinZoom) {
-                    if (ele->MinZoom()>=0) {
-                        current[i] = std::to_string(ele->MinZoom());
+                    if (ele->MinZoom()) {
+                        current[i] = std::to_string(*ele->MinZoom());
                     }
                 } else if (col.source == ColumnSource::ZOrder) {
-                    if (ele->ZOrder()>0 ) {
-                        current[i]=std::to_string(ele->ZOrder());
+                    if (ele->ZOrder()) {
+                        current[i]=std::to_string(*ele->ZOrder());
                     }
                 } else if (col.source == ColumnSource::Layer) {
-                    if (ele->ZOrder()>0 ) {
-                        current[i]=std::to_string(ele->ZOrder());
+                    if (ele->Layer()) {
+                        current[i]=std::to_string(*ele->Layer());
                     }
                 } else if (col.source == ColumnSource::Area) {
                     
@@ -832,8 +832,8 @@ class PackCsvBlocksTableBinary : public PackCsvBlocksTableBase {
                 } else if (col.source == ColumnSource::BlockQuadtree) {
                     current[i] = std::make_pair(true, pack_pg_int(col.type, block_qt));
                 } else if (col.source == ColumnSource::MinZoom) {
-                    if (ele->MinZoom()>0) {
-                        current[i] = std::make_pair(true, pack_pg_int(col.type, ele->MinZoom()));
+                    if (ele->MinZoom()) {
+                        current[i] = std::make_pair(true, pack_pg_int(col.type, *ele->MinZoom()));
                     }
                 } else if (col.source == ColumnSource::Geometry) {
                     if (!gg.geom.empty()) {
@@ -872,16 +872,16 @@ class PackCsvBlocksTableBinary : public PackCsvBlocksTableBase {
                 } else if (col.source == ColumnSource::BlockQuadtree) {
                     current[i] = std::make_pair(true, pack_pg_int(col.type, block_qt));
                 } else if (col.source == ColumnSource::MinZoom) {
-                    if (ele->MinZoom()>=0) {
-                        current[i] = std::make_pair(true, pack_pg_int(col.type, ele->MinZoom()));
+                    if (ele->MinZoom()) {
+                        current[i] = std::make_pair(true, pack_pg_int(col.type, *ele->MinZoom()));
                     }
                 } else if (col.source == ColumnSource::ZOrder) {
-                    if (ele->ZOrder()>0 ) {
-                        current[i]=std::make_pair(true, pack_pg_int(col.type, ele->ZOrder()));
+                    if (ele->ZOrder()) {
+                        current[i]=std::make_pair(true, pack_pg_int(col.type, *ele->ZOrder()));
                     }
                 } else if (col.source == ColumnSource::Layer) {
-                    if (ele->ZOrder()>0 ) {
-                        current[i]=std::make_pair(true, pack_pg_int(col.type, ele->ZOrder()));
+                    if (ele->Layer()) {
+                        current[i]=std::make_pair(true, pack_pg_int(col.type, *ele->Layer()));
                     }
                 } else if (col.source == ColumnSource::Length) {
                     current[i]=std::make_pair(true, pack_pg_double(col.type, round(ele->Length()*10.0)/10.0));
@@ -922,16 +922,16 @@ class PackCsvBlocksTableBinary : public PackCsvBlocksTableBase {
                 } else if (col.source == ColumnSource::BlockQuadtree) {
                     current[i] = std::make_pair(true, pack_pg_int(col.type, block_qt));
                 } else if (col.source == ColumnSource::MinZoom) {
-                    if (ele->MinZoom()>=0) {
-                        current[i] = std::make_pair(true, pack_pg_int(col.type, ele->MinZoom()));
+                    if (ele->MinZoom()) {
+                        current[i] = std::make_pair(true, pack_pg_int(col.type, *ele->MinZoom()));
                     }
                 } else if (col.source == ColumnSource::ZOrder) {
-                    if (ele->ZOrder()>0 ) {
-                        current[i]=std::make_pair(true, pack_pg_int(col.type, ele->ZOrder()));
+                    if (ele->ZOrder()) {
+                        current[i]=std::make_pair(true, pack_pg_int(col.type, *ele->ZOrder()));
                     }
                 } else if (col.source == ColumnSource::Layer) {
-                    if (ele->ZOrder()>0 ) {
-                        current[i]=std::make_pair(true, pack_pg_int(col.type, ele->ZOrder()));
+                    if (ele->Layer()) {
+                        current[i]=std::make_pair(true, pack_pg_int(col.type, *ele->Layer()));
                     }
                 } else if (col.source == ColumnSource::Area) {
                     current[i]=std::make_pair(true, pack_pg_double(col.type, round(ele->Area()*10.0)/10.0));
@@ -973,16 +973,16 @@ class PackCsvBlocksTableBinary : public PackCsvBlocksTableBase {
                 } else if (col.source == ColumnSource::BlockQuadtree) {
                     current[i] = std::make_pair(true, pack_pg_int(col.type, block_qt));
                 } else if (col.source == ColumnSource::MinZoom) {
-                    if (ele->MinZoom()>=0) {
-                        current[i] = std::make_pair(true, pack_pg_int(col.type, ele->MinZoom()));
+                    if (ele->MinZoom()) {
+                        current[i] = std::make_pair(true, pack_pg_int(col.type, *ele->MinZoom()));
                     }
                 } else if (col.source == ColumnSource::ZOrder) {
-                    if (ele->ZOrder()>0 ) {
-                        current[i]=std::make_pair(true, pack_pg_int(col.type, ele->ZOrder()));
+                    if (ele->ZOrder()) {
+                        current[i]=std::make_pair(true, pack_pg_int(col.type, *ele->ZOrder()));
                     }
                 } else if (col.source == ColumnSource::Layer) {
-                    if (ele->ZOrder()>0 ) {
-                        current[i]=std::make_pair(true, pack_pg_int(col.type, ele->ZOrder()));
+                    if (ele->Layer()) {
+                        current[i]=std::make_pair(true, pack_pg_int(col.type, *ele->Layer()));
                     }
                 } else if (col.source == ColumnSource::Area) {
                     current[i]=std::make_pair(true, pack_pg_double(col.type, round(ele->Area()*10.0)/10.0));
@@ -1025,16 +1025,16 @@ class PackCsvBlocksTableBinary : public PackCsvBlocksTableBase {
                 } else if (col.source == ColumnSource::BlockQuadtree) {
                     current[i] = std::make_pair(true, pack_pg_int(col.type, block_qt));
                 } else if (col.source == ColumnSource::MinZoom) {
-                    if (ele->MinZoom()>=0) {
-                        current[i] = std::make_pair(true, pack_pg_int(col.type, ele->MinZoom()));
+                    if (ele->MinZoom()) {
+                        current[i] = std::make_pair(true, pack_pg_int(col.type, *ele->MinZoom()));
                     }
                 } else if (col.source == ColumnSource::ZOrder) {
-                    if (ele->ZOrder()>0 ) {
-                        current[i]=std::make_pair(true, pack_pg_int(col.type, ele->ZOrder()));
+                    if (ele->ZOrder()) {
+                        current[i]=std::make_pair(true, pack_pg_int(col.type, *ele->ZOrder()));
                     }
                 } else if (col.source == ColumnSource::Layer) {
-                    if (ele->ZOrder()>0 ) {
-                        current[i]=std::make_pair(true, pack_pg_int(col.type, ele->ZOrder()));
+                    if (ele->Layer()) {
+                        current[i]=std::make_pair(true, pack_pg_int(col.type, *ele->Layer()));
                     }
                 } else if (col.source == ColumnSource::Area) {
                     double a = ele->Parts().at(part).area;

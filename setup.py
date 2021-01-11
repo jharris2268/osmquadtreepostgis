@@ -52,7 +52,7 @@ ext_modules.append(
                 postgresql_path,
             ],
             libraries=libs,
-            extra_compile_args=['-std=c++14',],
+            extra_compile_args=['-std=c++17',],
             
     )
 )
