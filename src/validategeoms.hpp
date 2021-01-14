@@ -42,8 +42,8 @@ class GeosGeometry {
         virtual std::string BoundaryLineWkb()=0;
 };
 
-std::shared_ptr<GeosGeometry> make_geos_geometry(std::shared_ptr<BaseGeometry> ele);
-std::shared_ptr<GeosGeometry> make_geos_geometry_cp_part(std::shared_ptr<ComplicatedPolygon> ele, size_t part);
+std::shared_ptr<GeosGeometry> make_geos_geometry(std::shared_ptr<BaseGeometry> ele, bool round);
+std::shared_ptr<GeosGeometry> make_geos_geometry_cp_part(std::shared_ptr<ComplicatedPolygon> ele, size_t part, bool round);
 
 }
 }

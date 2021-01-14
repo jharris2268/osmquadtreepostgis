@@ -55,8 +55,9 @@ def postgis_columns(style, add_min_zoom, extended=False, extra_node_cols=None, e
         opg.GeometryColumnSpec("tile", opg.GeometryColumnType.BigInteger, opg.GeometryColumnSource.BlockQuadtree),
     ]
     
-    point_cols += [opg.GeometryColumnSpec(k, opg.GeometryColumnType.Text, opg.GeometryColumnSource.Tag) for k in sorted(node_cols)]
+    point_cols += [opg.GeometryColumnSpec(k, opg.GeometryColumnType.Text, opg.GeometryColumnSource.Tag) for k in sorted(node_cols) if k!='layer']
     point_cols += [opg.GeometryColumnSpec(k, opg.GeometryColumnType.Text, opg.GeometryColumnSource.Tag) for k in style.parent_tags]
+    point_cols.append(opg.GeometryColumnSpec("layer", opg.GeometryColumnType.BigInteger, opg.GeometryColumnSource.Layer))
     
     if add_min_zoom:
         point_cols.append(opg.GeometryColumnSpec('minzoom', opg.GeometryColumnType.BigInteger, opg.GeometryColumnSource.MinZoom))
@@ -478,6 +479,7 @@ def write_to_postgis(prfx, box_in,connstr, tabprfx, stylefn=None, writeindices=T
     if extended:
         postgisparams.alloc_func='extended'
     postgisparams.validate_geometry = True
+    postgisparams.round_geometry = False
     
     if tabprfx and not tabprfx.endswith('_'):
         tabprfx = tabprfx+'_'

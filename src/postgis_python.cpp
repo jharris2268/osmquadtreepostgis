@@ -321,6 +321,7 @@ void osmquadtreepostgis_defs(py::module& m) {
         .def_property("alloc_func", [](geometry::PostgisParameters& gp) { return gp.alloc_func; }, &set_params_alloc_func) 
         .def_readwrite("split_multipolygons", &geometry::PostgisParameters::split_multipolygons)
         .def_readwrite("validate_geometry", &geometry::PostgisParameters::validate_geometry)
+        .def_readwrite("round_geometry", &geometry::PostgisParameters::round_geometry)
     ;
     
     m.def("process_geometry_postgis", &process_geometry_postgis_py);
@@ -392,8 +393,8 @@ void osmquadtreepostgis_defs(py::module& m) {
             ts.columns=cc;
         })
     ;
-    m.def("validate_geometry", [](std::shared_ptr<BaseGeometry> ele) {
-        auto gg = geometry::make_geos_geometry(ele);
+    m.def("validate_geometry", [](std::shared_ptr<BaseGeometry> ele, bool round_geometry) {
+        auto gg = geometry::make_geos_geometry(ele,round_geometry);
         gg->validate();
         auto a = py::bytes(gg->Wkb());
         auto b = py::bytes(gg->PointWkb());

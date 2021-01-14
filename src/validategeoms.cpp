@@ -30,28 +30,28 @@ namespace geometry {
     
 class GeosGeometryImpl : public GeosGeometry {
     public:
-        GeosGeometryImpl(std::shared_ptr<oqt::BaseGeometry> geom) {
+        GeosGeometryImpl(std::shared_ptr<oqt::BaseGeometry> geom, bool round) {
             
             handle = GEOS_init_r();
             
             
             
             if (geom->Type() == oqt::ElementType::Point) {
-                geometry = make_point(std::dynamic_pointer_cast<Point>(geom));
+                geometry = make_point(std::dynamic_pointer_cast<Point>(geom), round);
             } else if (geom->Type() == oqt::ElementType::Linestring) {
-                geometry = make_linestring(std::dynamic_pointer_cast<Linestring>(geom));
+                geometry = make_linestring(std::dynamic_pointer_cast<Linestring>(geom), round);
             }  else if (geom->Type() == oqt::ElementType::SimplePolygon) {
-                geometry = make_simplepolygon(std::dynamic_pointer_cast<SimplePolygon>(geom));
+                geometry = make_simplepolygon(std::dynamic_pointer_cast<SimplePolygon>(geom), round);
             }  else if (geom->Type() == oqt::ElementType::ComplicatedPolygon) {
-                geometry = make_complicatedpolygon(std::dynamic_pointer_cast<ComplicatedPolygon>(geom));
+                geometry = make_complicatedpolygon(std::dynamic_pointer_cast<ComplicatedPolygon>(geom), round);
             } else {
                 geometry = GEOSGeom_createEmptyCollection_r(handle, 7);
             }
         }
         
-        GeosGeometryImpl(std::shared_ptr<ComplicatedPolygon> geom, size_t part) {
+        GeosGeometryImpl(std::shared_ptr<ComplicatedPolygon> geom, size_t part, bool round) {
             handle = GEOS_init_r();
-            geometry = make_complicatedpolygon_part(geom->Parts().at(part));
+            geometry = make_complicatedpolygon_part(geom->Parts().at(part), round);
         }
         
         virtual ~GeosGeometryImpl() {
@@ -138,67 +138,70 @@ class GeosGeometryImpl : public GeosGeometry {
         }
         
         
-        GEOSGeometry* make_point(std::shared_ptr<Point> pt) {
+        GEOSGeometry* make_point(std::shared_ptr<Point> pt, bool round) {
             
             
-            GEOSCoordSequence* coords = make_coords({pt->LonLat()});
+            GEOSCoordSequence* coords = make_coords({pt->LonLat()}, round);
             return GEOSGeom_createPoint_r(handle, coords);
         }
         
-        GEOSCoordSequence* make_coords(const std::vector<LonLat>& lls) {
+        GEOSCoordSequence* make_coords(const std::vector<LonLat>& lls, bool round) {
             
             GEOSCoordSequence* coords = GEOSCoordSeq_create_r(handle, lls.size(), 2);
             for (size_t i=0; i < lls.size(); i++) {
                 const auto& ll = lls[i];
                 auto p = forward_transform(ll.lon, ll.lat);
+                if (round) {
+                    p = p.round_2dp();
+                }
                 GEOSCoordSeq_setX_r(handle, coords, i, p.x);
                 GEOSCoordSeq_setY_r(handle, coords, i, p.y);
             }
             return coords;
         }
         
-        GEOSGeometry* make_linestring(std::shared_ptr<Linestring> line) {
-            GEOSCoordSequence* coords = make_coords(line->LonLats());
+        GEOSGeometry* make_linestring(std::shared_ptr<Linestring> line, bool round) {
+            GEOSCoordSequence* coords = make_coords(line->LonLats(),round);
             return GEOSGeom_createLineString_r(handle, coords);
         }
         
-        GEOSGeometry* make_simplepolygon(std::shared_ptr<SimplePolygon> line) {
-            GEOSGeometry* outer = GEOSGeom_createLinearRing_r(handle, make_coords(line->LonLats()));
+        GEOSGeometry* make_simplepolygon(std::shared_ptr<SimplePolygon> line, bool round) {
+            GEOSGeometry* outer = GEOSGeom_createLinearRing_r(handle, make_coords(line->LonLats(),round));
             return GEOSGeom_createPolygon_r(handle, outer, nullptr, 0);
         }
         
-        GEOSGeometry* make_complicatedpolygon_part(const PolygonPart& part) {
-            GEOSGeometry* outer = GEOSGeom_createLinearRing_r(handle, make_coords(ringpart_lonlats(part.outer)));
+        GEOSGeometry* make_complicatedpolygon_part(const PolygonPart& part, bool round) {
+            GEOSGeometry* outer = GEOSGeom_createLinearRing_r(handle, make_coords(ringpart_lonlats(part.outer), round));
             if (part.inners.empty()) {
                 return GEOSGeom_createPolygon_r(handle, outer, nullptr, 0);
             }
             
             std::vector<GEOSGeometry*> inners;
             for (const auto& inn: part.inners) {
-                inners.push_back(GEOSGeom_createLinearRing_r(handle, make_coords(ringpart_lonlats(inn))));
+                inners.push_back(GEOSGeom_createLinearRing_r(handle, make_coords(ringpart_lonlats(inn), round)));
             }
             
             return GEOSGeom_createPolygon_r(handle, outer, &inners[0], inners.size());
         }
         
-        GEOSGeometry* make_complicatedpolygon(std::shared_ptr<ComplicatedPolygon> poly) {
+        GEOSGeometry* make_complicatedpolygon(std::shared_ptr<ComplicatedPolygon> poly, bool round) {
             
             if (poly->Parts().size()==0) {
                 return GEOSGeom_createEmptyCollection_r(handle, 7);
             } else if (poly->Parts().size()==1) {
                 
-                return make_complicatedpolygon_part(poly->Parts()[0]);
+                return make_complicatedpolygon_part(poly->Parts()[0], round);
             }   
             std::vector<GEOSGeometry*> geoms;
             for (const auto& pt: poly->Parts()) {
-                geoms.push_back(make_complicatedpolygon_part(pt));
+                geoms.push_back(make_complicatedpolygon_part(pt, round));
             }
             return GEOSGeom_createCollection_r(handle, 6, &geoms[0], geoms.size());
         }
               
 };
 
-std::shared_ptr<GeosGeometry> make_geos_geometry(std::shared_ptr<BaseGeometry> ele) { return std::make_shared<GeosGeometryImpl>(ele); }
-std::shared_ptr<GeosGeometry> make_geos_geometry_cp_part(std::shared_ptr<ComplicatedPolygon> ele, size_t part) { return std::make_shared<GeosGeometryImpl>(ele, part); }
+std::shared_ptr<GeosGeometry> make_geos_geometry(std::shared_ptr<BaseGeometry> ele, bool round) { return std::make_shared<GeosGeometryImpl>(ele,round); }
+std::shared_ptr<GeosGeometry> make_geos_geometry_cp_part(std::shared_ptr<ComplicatedPolygon> ele, size_t part, bool round) { return std::make_shared<GeosGeometryImpl>(ele, part,round); }
 }
 }

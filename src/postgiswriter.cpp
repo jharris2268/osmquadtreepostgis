@@ -91,9 +91,11 @@ std::ostream& operator<<(std::ostream& strm, const DoublePrec& d) {
     return strm;
 }
 
-std::string double_string(double v) {
+std::string double_string(double v, bool round) {
     std::stringstream ss;
-    ss << DoublePrec{v,1};
+    if (round) {
+        ss << DoublePrec{v,1};
+    }
     return ss.str();
 }
 
@@ -458,7 +460,7 @@ class PackCsvBlocksTable : public PackCsvBlocksTableBase {
                         current[i]=std::to_string(*ele->Layer());
                     }
                 } else if (col.source == ColumnSource::Length) {
-                    current[i]=double_string(ele->Length());
+                    current[i]=double_string(ele->Length(), true);
                     
                 } else if (col.source == ColumnSource::Geometry) {
                     current[i] = as_hex(ele->Wkb(true, true));
@@ -498,7 +500,7 @@ class PackCsvBlocksTable : public PackCsvBlocksTableBase {
                         current[i]=std::to_string(*ele->Layer());
                     }
                 } else if (col.source == ColumnSource::Area) {
-                    current[i]=double_string(ele->Area());
+                    current[i]=double_string(ele->Area(), true);
                     
                 } else if (col.source == ColumnSource::Geometry) {
                     current[i] = as_hex(ele->Wkb(true, true));
@@ -540,7 +542,7 @@ class PackCsvBlocksTable : public PackCsvBlocksTableBase {
                         current[i]=std::to_string(*ele->Layer());
                     }
                 } else if (col.source == ColumnSource::Area) {
-                    current[i]=double_string(ele->Area());
+                    current[i]=double_string(ele->Area(), true);
                     
                 } else if (col.source == ColumnSource::Geometry) {
                     current[i] = as_hex(ele->Wkb(true, true));
@@ -582,7 +584,7 @@ class PackCsvBlocksTable : public PackCsvBlocksTableBase {
                     }
                 } else if (col.source == ColumnSource::Area) {
                     
-                    current[i]=double_string(ele->Parts().at(part).area);
+                    current[i]=double_string(ele->Parts().at(part).area, true);
                     
                 } else if (col.source == ColumnSource::Geometry) {
                     auto w = geometry::polygon_part_wkb(ele->Parts().at(part), true, true);
@@ -658,8 +660,8 @@ struct prep_geometry_result {
 
 class PackCsvBlocksTableBinary : public PackCsvBlocksTableBase {
     public:
-        PackCsvBlocksTableBinary(const TableSpec& table_spec_, bool validate_geometry_)
-         : table_spec(table_spec_), validate_geometry(validate_geometry_), othertags_col(-1), has_geometry(false), has_rep_point(false), has_boundary_line(false) {
+        PackCsvBlocksTableBinary(const TableSpec& table_spec_, bool validate_geometry_, bool round_geometry_)
+         : table_spec(table_spec_), validate_geometry(validate_geometry_), round_geometry(round_geometry_), othertags_col(-1), has_geometry(false), has_rep_point(false), has_boundary_line(false) {
             
             
             for (size_t i=0; i<table_spec.columns.size(); i++) {
@@ -724,6 +726,7 @@ class PackCsvBlocksTableBinary : public PackCsvBlocksTableBase {
     private:
         TableSpec table_spec;
         bool validate_geometry;
+        bool round_geometry;
         int othertags_col;
         std::map<std::string,size_t> tag_cols;
         bool has_geometry;
@@ -738,18 +741,20 @@ class PackCsvBlocksTableBinary : public PackCsvBlocksTableBase {
                 return res;
             }
             
-            if (geom->Type() == oqt::ElementType::Point) {
-                res.geom = geom->Wkb(true,true);
-                res.rep_point_geom = res.geom;
-                return res;
+            if (!round_geometry) {
+                if (geom->Type() == oqt::ElementType::Point) {
+                    res.geom = geom->Wkb(true,true);
+                    res.rep_point_geom = res.geom;
+                    return res;
+                }
+                
+                if (has_geometry && (!has_rep_point) && (!validate_geometry) && (!has_boundary_line)) {
+                    res.geom = geom->Wkb(true,true);
+                    return res;
+                }
             }
             
-            if (has_geometry && (!has_rep_point) && (!validate_geometry) && (!has_boundary_line)) {
-                res.geom = geom->Wkb(true,true);
-                return res;
-            }
-            
-            auto gg = make_geos_geometry(geom);
+            auto gg = make_geos_geometry(geom, round_geometry);
             
             if (validate_geometry) {
                 gg->validate();
@@ -772,18 +777,19 @@ class PackCsvBlocksTableBinary : public PackCsvBlocksTableBase {
         }
         prep_geometry_result prep_geometry_cp_part(std::shared_ptr<ComplicatedPolygon> geom, size_t part) {
             prep_geometry_result res;
-            
-            if ((!has_geometry) && (!has_rep_point) && (!has_boundary_line)) {
-                return res;
+            if (!round_geometry) {
+                if ((!has_geometry) && (!has_rep_point) && (!has_boundary_line)) {
+                    return res;
+                }
+                
+                
+                if (has_geometry && (!has_rep_point) && (!validate_geometry) && (!has_boundary_line)) {
+                    res.geom = geom->Wkb(true,true);
+                    return res;
+                }
             }
             
-            
-            if (has_geometry && (!has_rep_point) && (!validate_geometry) && (!has_boundary_line)) {
-                res.geom = geom->Wkb(true,true);
-                return res;
-            }
-            
-            auto gg = make_geos_geometry_cp_part(geom,part);
+            auto gg = make_geos_geometry_cp_part(geom,part,round_geometry);
             
             if (validate_geometry) {
                 gg->validate();
@@ -884,7 +890,7 @@ class PackCsvBlocksTableBinary : public PackCsvBlocksTableBase {
                         current[i]=std::make_pair(true, pack_pg_int(col.type, *ele->Layer()));
                     }
                 } else if (col.source == ColumnSource::Length) {
-                    current[i]=std::make_pair(true, pack_pg_double(col.type, round(ele->Length()*10.0)/10.0));
+                    current[i]=std::make_pair(true, pack_pg_double(col.type, (round_geometry ? (round(ele->Length()*10.0)/10.0) : ele->Length())));
                     
                 } else if (col.source == ColumnSource::Geometry) {
                     if (!gg.geom.empty()) {
@@ -934,7 +940,7 @@ class PackCsvBlocksTableBinary : public PackCsvBlocksTableBase {
                         current[i]=std::make_pair(true, pack_pg_int(col.type, *ele->Layer()));
                     }
                 } else if (col.source == ColumnSource::Area) {
-                    current[i]=std::make_pair(true, pack_pg_double(col.type, round(ele->Area()*10.0)/10.0));
+                    current[i]=std::make_pair(true, pack_pg_double(col.type, (round_geometry ? (round(ele->Area()*10.0)/10.0) : ele->Area())));
                     
                 } else if (col.source == ColumnSource::Geometry) {
                     if (!gg.geom.empty()) {
@@ -985,7 +991,7 @@ class PackCsvBlocksTableBinary : public PackCsvBlocksTableBase {
                         current[i]=std::make_pair(true, pack_pg_int(col.type, *ele->Layer()));
                     }
                 } else if (col.source == ColumnSource::Area) {
-                    current[i]=std::make_pair(true, pack_pg_double(col.type, round(ele->Area()*10.0)/10.0));
+                    current[i]=std::make_pair(true, pack_pg_double(col.type, (round_geometry ? (round(ele->Area()*10.0)/10.0) : ele->Area())));
                     
                 } else if (col.source == ColumnSource::Geometry) {
                     if (!gg.geom.empty()) {
@@ -1038,7 +1044,7 @@ class PackCsvBlocksTableBinary : public PackCsvBlocksTableBase {
                     }
                 } else if (col.source == ColumnSource::Area) {
                     double a = ele->Parts().at(part).area;
-                    current[i]=std::make_pair(true, pack_pg_double(col.type, round(a*10.0)/10.0));
+                    current[i]=std::make_pair(true, pack_pg_double(col.type, (round_geometry ? (round(a*10.0)/10.0) : a)));
                     
                 } else if (col.source == ColumnSource::Geometry) {
                     if (!gg.geom.empty()) {
@@ -1072,8 +1078,8 @@ class PackCsvBlocksTableBinary : public PackCsvBlocksTableBase {
 
 class PackCsvBlocksImpl : public PackCsvBlocks {
     public:
-        PackCsvBlocksImpl(const PackCsvBlocks::tagspec& tags, bool with_header_, bool binary_format_, table_alloc_func alloc_func_, bool split_multipolygons_, bool validate_geometry_)
-            : with_header(with_header_), binary_format(binary_format_),alloc_func(alloc_func_), split_multipolygons(split_multipolygons_),validate_geometry(validate_geometry_) {
+        PackCsvBlocksImpl(const PackCsvBlocks::tagspec& tags, bool with_header_, bool binary_format_, table_alloc_func alloc_func_, bool split_multipolygons_, bool validate_geometry_, bool round_geometry_)
+            : with_header(with_header_), binary_format(binary_format_),alloc_func(alloc_func_), split_multipolygons(split_multipolygons_),validate_geometry(validate_geometry_), round_geometry(round_geometry_) {
             
             if (!alloc_func) {
                 alloc_func = default_table_alloc;
@@ -1081,7 +1087,7 @@ class PackCsvBlocksImpl : public PackCsvBlocks {
             
             for (const auto& ts: tags) {
                 if (binary_format) {
-                    tables[ts.table_name] = std::make_shared<PackCsvBlocksTableBinary>(ts,validate_geometry);
+                    tables[ts.table_name] = std::make_shared<PackCsvBlocksTableBinary>(ts,validate_geometry,round_geometry);
                 } else {
                     tables[ts.table_name] = std::make_shared<PackCsvBlocksTable>(ts);
                 }
@@ -1141,11 +1147,12 @@ class PackCsvBlocksImpl : public PackCsvBlocks {
         table_alloc_func alloc_func;
         bool split_multipolygons;
         bool validate_geometry;
+        bool round_geometry;
         std::set<std::string> unknowns;
 };
 
-std::shared_ptr<PackCsvBlocks> make_pack_csvblocks(const PackCsvBlocks::tagspec& tags, bool with_header, bool binary_format, table_alloc_func alloc_func, bool split_multipolygons, bool validate_geometry) {
-    return std::make_shared<PackCsvBlocksImpl>(tags, with_header,binary_format, alloc_func, split_multipolygons,validate_geometry);
+std::shared_ptr<PackCsvBlocks> make_pack_csvblocks(const PackCsvBlocks::tagspec& tags, bool with_header, bool binary_format, table_alloc_func alloc_func, bool split_multipolygons, bool validate_geometry, bool round_geometry) {
+    return std::make_shared<PackCsvBlocksImpl>(tags, with_header,binary_format, alloc_func, split_multipolygons,validate_geometry,round_geometry);
 }            
             
 
