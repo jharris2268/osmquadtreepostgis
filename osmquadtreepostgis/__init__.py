@@ -557,7 +557,7 @@ class CsvWriter:
             self.num[k] += len(v)
             
     
-def write_to_csvfile(prfx, box_in,outfnprfx,  stylefn=None, lastdate=None,minzoom=None,nothread=False, numchan=4, minlen=0,minarea=5, use_binary=True):
+def write_to_csvfile(prfx, box_in,outfnprfx,  stylefn=None, lastdate=None,minzoom=None,nothread=False, numchan=4, minlen=0,minarea=5, extended=True, use_binary=True):
     
     params,style = process.prep_geometry_params(prfx, box_in, stylefn, lastdate, minzoom, numchan, minlen, minarea)
     
@@ -566,7 +566,8 @@ def write_to_csvfile(prfx, box_in,outfnprfx,  stylefn=None, lastdate=None,minzoo
     
     postgisparams=opg.PostgisParameters()
     postgisparams.coltags = postgis_columns(style, params.findmz is not None, extended)
-    postgisparams.alloc_func='extended'
+    if extended:
+        postgisparams.alloc_func='extended'
     postgisparams.use_binary=use_binary
     
     

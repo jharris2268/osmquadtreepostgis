@@ -223,7 +223,7 @@ std::vector<std::string> extended_table_alloc(ElementPtr geom) {
     
     if (geom->Type()==ElementType::Linestring) {
         auto ln = std::dynamic_pointer_cast<geometry::Linestring>(geom);
-        if (ln->ZOrder() > 0) {
+        if (ln->ZOrder()) {
             return {"highway"};
         } else {
             return {"line"};
